@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TaskBloc</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Nunito:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #faf7f2; --bg2: #f4ede3; --surface: #fffcf8; --surface2: #f7f1e8;
+  --surface3: #ede5d8; --border: #e0d4c3; --border2: #cfc0aa;
+  --accent: #c45c2a; --accent-light: #f0e8df; --accent2: #7a9e7e; --accent2-light: #e8f0e9;
+  --text: #3a2e24; --text2: #7a6a58; --text3: #b0a090;
+  --gold: #c49a3c; --gold-light: #fdf3dc; --purple: #8b6fb5; --purple-light: #f0ebf8;
+  --shadow: rgba(90,60,30,0.08); --shadow2: rgba(90,60,30,0.14);
+}
+html, body { height: 100%; background: var(--bg); color: var(--text); font-family: 'Nunito', sans-serif; overflow-x: hidden; }
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
+#root { height: 100%; }
+.app { display: flex; height: 100vh; overflow: hidden; }
+
+/* SIDEBAR */
+.sidebar { width: 230px; min-width: 230px; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 28px 16px 20px; gap: 3px; box-shadow: 2px 0 12px var(--shadow); overflow-y: auto; }
+.sidebar-logo { font-family: 'Lora', serif; font-weight: 700; font-size: 22px; color: var(--accent); margin-bottom: 6px; }
+.sidebar-logo-sub { font-size: 11px; color: var(--text3); margin-bottom: 22px; }
+.sidebar-day { padding: 10px 12px; border-radius: 10px; cursor: pointer; transition: background 0.15s; border: 1.5px solid transparent; }
+.sidebar-day:hover { background: var(--surface2); }
+.sidebar-day.active { background: var(--surface2); border-color: var(--border); }
+.sidebar-day.today { border-color: var(--accent) !important; background: #fef4ee; }
+.sidebar-day-label { font-weight: 700; font-size: 10px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--text3); }
+.sidebar-day.today .sidebar-day-label { color: var(--accent); }
+.sidebar-day.active .sidebar-day-label { color: var(--text2); }
+.sidebar-day-date { font-size: 13px; font-weight: 600; color: var(--text); margin-top: 1px; }
+.sidebar-day-count { font-size: 10px; color: var(--text3); margin-top: 2px; }
+.sidebar-section-label { font-weight: 700; font-size: 10px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--text3); padding: 14px 12px 6px; }
+
+/* MAIN */
+.main { flex: 1; overflow-y: auto; padding: 32px 28px; display: flex; flex-direction: column; gap: 24px; }
+
+/* TODAY BLOCK */
+.today-block { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 26px; box-shadow: 0 2px 16px var(--shadow); position: relative; overflow: hidden; }
+.today-block::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px; background: linear-gradient(90deg, var(--accent), var(--gold)); border-radius: 16px 16px 0 0; }
+.block-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 20px; }
+.block-title { font-family: 'Lora', serif; font-weight: 700; font-size: 24px; color: var(--text); }
+.block-title .date-sub { display: block; font-family: 'Nunito', sans-serif; font-weight: 400; font-size: 12px; color: var(--text3); margin-top: 3px; font-style: italic; }
+
+/* BUTTONS */
+.btn { padding: 7px 16px; border-radius: 20px; font-family: 'Nunito', sans-serif; font-size: 12px; font-weight: 600; cursor: pointer; border: 1.5px solid var(--border); background: var(--surface2); color: var(--text2); transition: all 0.15s; white-space: nowrap; }
+.btn:hover { background: var(--surface3); border-color: var(--border2); color: var(--text); }
+.btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn.primary:hover { background: #b05025; }
+.btn.dump { background: var(--gold-light); border-color: #e0c070; color: var(--gold); }
+.btn.dump:hover { background: #fcefd0; border-color: var(--gold); }
+.btn.danger { background: #fde8e8; border-color: #f0b8b8; color: #c0392b; }
+.btn.danger:hover { background: #fbd0d0; border-color: #e08888; }
+.btn.sm { padding: 5px 12px; font-size: 11px; }
+
+.add-task-row { display: flex; gap: 8px; margin-bottom: 16px; }
+.add-task-input { flex: 1; background: var(--surface2); border: 1.5px solid var(--border); border-radius: 20px; padding: 8px 16px; font-family: 'Nunito', sans-serif; font-size: 13px; color: var(--text); outline: none; transition: border-color 0.15s; }
+.add-task-input::placeholder { color: var(--text3); }
+.add-task-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(196,92,42,0.1); }
+
+/* TASK LIST */
+.task-list { display: flex; flex-direction: column; gap: 7px; min-height: 30px; }
+.task-item { background: var(--surface2); border: 1.5px solid var(--border); border-radius: 12px; padding: 11px 14px; display: flex; align-items: center; gap: 10px; cursor: grab; transition: all 0.15s; position: relative; user-select: none; box-shadow: 0 1px 4px var(--shadow); }
+.task-item:hover { border-color: var(--border2); background: var(--surface); box-shadow: 0 2px 8px var(--shadow2); transform: translateY(-1px); }
+.task-item.dragging { opacity: 0.4; cursor: grabbing; transform: none; }
+.task-item.drag-over { border-color: var(--accent); border-style: dashed; background: #fef4ee; }
+.task-item.complete { background: var(--bg2); border-color: var(--border); box-shadow: none; transform: none; opacity: 0.65; }
+.task-item.complete:hover { transform: none; box-shadow: none; }
+.task-drag-handle { color: var(--text3); font-size: 14px; cursor: grab; flex-shrink: 0; opacity: 0.5; }
+.task-item:hover .task-drag-handle { opacity: 1; }
+.task-check { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--border2); flex-shrink: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+.task-check:hover { border-color: var(--accent2); background: var(--accent2-light); }
+.task-check.checked { background: var(--accent2); border-color: var(--accent2); }
+.task-check.checked::after { content: '\2713'; font-size: 10px; color: #fff; font-weight: 700; }
+.task-body { flex: 1; min-width: 0; }
+.task-name { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.task-item.complete .task-name { text-decoration: line-through; color: var(--text3); font-weight: 400; }
+.task-status { font-size: 11px; color: var(--accent); margin-top: 2px; font-style: italic; font-weight: 500; }
+.task-item.complete .task-status { color: var(--text3); }
+.task-meta { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.task-attach-badge { font-size: 11px; color: var(--text3); }
+.task-open-btn { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 14px; padding: 3px 5px; border-radius: 6px; transition: all 0.12s; flex-shrink: 0; }
+.task-open-btn:hover { color: var(--accent); background: var(--accent-light); }
+.task-item.complete::after { content: 'done'; position: absolute; right: 40px; font-family: 'Lora', serif; font-style: italic; font-size: 16px; color: var(--surface3); pointer-events: none; }
+
+.day-drop-zone { border: 2px dashed var(--border); border-radius: 10px; padding: 10px; text-align: center; font-size: 11px; color: var(--text3); margin-top: 10px; transition: all 0.15s; font-style: italic; }
+.day-drop-zone.active { border-color: var(--accent); color: var(--accent); background: #fef4ee; }
+
+/* WEEK STRIP */
+.week-strip { display: flex; flex-direction: column; gap: 12px; }
+.strip-label { font-weight: 700; font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text3); padding-left: 2px; }
+.week-days { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px; }
+.week-day-card { min-width: 150px; background: var(--surface); border: 1.5px solid var(--border); border-radius: 14px; padding: 14px; flex-shrink: 0; cursor: pointer; transition: all 0.15s; box-shadow: 0 1px 6px var(--shadow); }
+.week-day-card:hover { border-color: var(--border2); box-shadow: 0 3px 12px var(--shadow2); transform: translateY(-2px); }
+.week-day-card.drag-target { border-color: var(--accent) !important; background: #fef4ee; }
+.week-day-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+.week-day-name { font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text3); }
+.week-day-date-num { font-family: 'Lora', serif; font-weight: 700; font-size: 22px; color: var(--text); line-height: 1; }
+.week-day-month { font-size: 9px; color: var(--text3); margin-top: 1px; }
+.week-task-pill { background: var(--surface2); border-radius: 6px; padding: 5px 8px; font-size: 11px; color: var(--text2); margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px; border: 1px solid var(--border); }
+.week-task-pill.complete { text-decoration: line-through; color: var(--text3); opacity: 0.5; }
+.week-task-pill-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+.week-task-pill.complete .week-task-pill-dot { background: var(--text3); }
+.week-empty { font-size: 11px; color: var(--text3); font-style: italic; }
+
+/* LOOKING FORWARD */
+.looking-forward { background: var(--surface); border: 1.5px solid var(--border); border-radius: 16px; padding: 22px; box-shadow: 0 2px 12px var(--shadow); position: relative; overflow: hidden; }
+.looking-forward::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px; background: linear-gradient(90deg, var(--purple), #b8a0d8); border-radius: 16px 16px 0 0; }
+.looking-forward.drop-active { border-color: var(--purple); background: #f8f4fc; }
+.lf-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.lf-title { font-family: 'Lora', serif; font-weight: 600; font-size: 18px; color: var(--text); }
+.lf-subtitle { font-size: 11px; color: var(--text3); font-style: italic; margin-bottom: 14px; }
+.lf-task-item { background: var(--surface2); border: 1.5px solid var(--border); border-radius: 10px; padding: 10px 14px; display: flex; align-items: center; gap: 10px; transition: all 0.15s; margin-bottom: 6px; box-shadow: 0 1px 4px var(--shadow); }
+.lf-task-item:hover { border-color: var(--border2); background: var(--surface); }
+.lf-task-name { flex: 1; font-size: 13px; font-weight: 600; color: var(--text); min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lf-task-remove { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 13px; padding: 2px 5px; border-radius: 5px; transition: all 0.12s; }
+.lf-task-remove:hover { color: var(--accent); background: var(--accent-light); }
+.lf-drop-hint { border: 2px dashed var(--border); border-radius: 10px; padding: 18px; text-align: center; font-size: 12px; color: var(--text3); font-style: italic; transition: all 0.15s; }
+.looking-forward.drop-active .lf-drop-hint { border-color: var(--purple); color: var(--purple); background: rgba(139,111,181,0.04); }
+.lf-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--purple); flex-shrink: 0; opacity: 0.6; }
+
+/* MODALS */
+.modal-overlay { position: fixed; inset: 0; background: rgba(60,40,20,0.45); display: flex; align-items: center; justify-content: center; z-index: 100; backdrop-filter: blur(6px); }
+.modal { background: var(--surface); border: 1.5px solid var(--border); border-radius: 18px; padding: 30px; width: 520px; max-width: 95vw; max-height: 90vh; overflow-y: auto; display: flex; flex-direction: column; gap: 18px; animation: modalIn 0.18s ease; box-shadow: 0 8px 40px rgba(60,40,20,0.18); }
+@keyframes modalIn { from { opacity:0; transform:scale(0.95) translateY(10px); } to { opacity:1; transform:scale(1) translateY(0); } }
+.modal-header { display: flex; justify-content: space-between; align-items: flex-start; }
+.modal-task-name { font-family: 'Lora', serif; font-weight: 600; font-size: 20px; color: var(--text); flex: 1; margin-right: 12px; line-height: 1.3; }
+.modal-close { background: var(--surface2); border: 1px solid var(--border); color: var(--text3); font-size: 14px; cursor: pointer; padding: 4px 8px; line-height: 1; border-radius: 8px; transition: all 0.12s; }
+.modal-close:hover { background: var(--surface3); color: var(--text); }
+.modal-field label { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--text3); margin-bottom: 6px; font-weight: 700; }
+.modal-input { width: 100%; background: var(--surface2); border: 1.5px solid var(--border); border-radius: 10px; padding: 10px 14px; font-family: 'Nunito', sans-serif; font-size: 13px; color: var(--text); outline: none; transition: border-color 0.15s; }
+.modal-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(196,92,42,0.1); }
+.modal-textarea { width: 100%; background: var(--surface2); border: 1.5px solid var(--border); border-radius: 10px; padding: 10px 14px; font-family: 'Nunito', sans-serif; font-size: 13px; color: var(--text); outline: none; resize: vertical; min-height: 90px; transition: border-color 0.15s; line-height: 1.6; }
+.modal-textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(196,92,42,0.1); }
+.modal-textarea::placeholder, .modal-input::placeholder { color: var(--text3); }
+.modal-divider { height: 1px; background: var(--border); }
+.modal-footer { display: flex; justify-content: space-between; align-items: center; padding-top: 4px; border-top: 1px solid var(--border); }
+.modal-footer-right { display: flex; gap: 8px; }
+
+/* TRASH BUTTON */
+.trash-btn { background: none; border: 1.5px solid #f0b8b8; border-radius: 20px; color: #c0392b; cursor: pointer; font-size: 14px; padding: 6px 12px; display: flex; align-items: center; gap: 5px; font-family: 'Nunito', sans-serif; font-size: 12px; font-weight: 600; transition: all 0.15s; }
+.trash-btn:hover { background: #fde8e8; border-color: #e08888; }
+
+/* ATTACHMENTS */
+.drop-zone { border: 2px dashed var(--border2); border-radius: 12px; padding: 20px 16px; text-align: center; cursor: pointer; transition: all 0.2s; background: var(--surface2); position: relative; }
+.drop-zone:hover, .drop-zone.over { border-color: var(--accent); background: #fef4ee; }
+.drop-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+.drop-zone-icon { font-size: 22px; margin-bottom: 5px; }
+.drop-zone-label { font-size: 13px; font-weight: 600; color: var(--text2); }
+.drop-zone-sub { font-size: 11px; color: var(--text3); margin-top: 3px; font-style: italic; }
+.link-row { display: flex; gap: 8px; }
+.attachment-list { display: flex; flex-direction: column; gap: 6px; }
+.attachment-item { display: flex; align-items: center; gap: 10px; background: var(--surface2); border: 1.5px solid var(--border); border-radius: 10px; padding: 9px 12px; transition: all 0.12s; }
+.attachment-item:hover { border-color: var(--border2); background: var(--surface); }
+.attach-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
+.attach-icon.pdf { background: #fde8e8; }
+.attach-icon.img { background: #e8f0e9; }
+.attach-icon.doc { background: #e8eef8; }
+.attach-icon.lnk { background: var(--gold-light); }
+.attach-icon.def { background: var(--surface3); }
+.attach-info { flex: 1; min-width: 0; }
+.attach-name { font-size: 12px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.attach-meta { font-size: 10px; color: var(--text3); margin-top: 1px; font-style: italic; }
+.attach-remove { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 14px; padding: 2px 5px; border-radius: 5px; transition: all 0.12s; flex-shrink: 0; }
+.attach-remove:hover { color: var(--accent); background: var(--accent-light); }
+
+/* CONFIRM DIALOG */
+.confirm-modal { width: 360px; }
+.confirm-modal .modal-task-name { font-size: 17px; }
+
+.dump-modal-inner { width: 360px; }
+.time-row { display: flex; gap: 10px; align-items: center; }
+.time-row .modal-input { flex: 1; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect } = React;
+const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const MS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function next8() { return Array.from({length:8},(_,i)=>{ const d=new Date(); d.setDate(d.getDate()+i); return d; }); }
+function dk(d) { return d.getFullYear()+'-'+d.getMonth()+'-'+d.getDate(); }
+function uid() { return Math.random().toString(36).slice(2); }
+function fileIcon(name) {
+  if (!name) return {icon:'🔗',cls:'lnk'};
+  const e=name.split('.').pop().toLowerCase();
+  if (['jpg','jpeg','png','gif','webp','svg'].includes(e)) return {icon:'🖼',cls:'img'};
+  if (e==='pdf') return {icon:'📄',cls:'pdf'};
+  if (['doc','docx','txt','md'].includes(e)) return {icon:'📝',cls:'doc'};
+  return {icon:'📎',cls:'def'};
+}
+function fmtSize(b) {
+  if (!b) return '';
+  if (b<1024) return b+' B';
+  if (b<1048576) return (b/1024).toFixed(1)+' KB';
+  return (b/1048576).toFixed(1)+' MB';
+}
+
+const TK = dk(new Date());
+const SEED = { [TK]: [
+  {id:uid(),name:'AIGP study — Domain 2',status:'in progress',context:'Focus on risk frameworks and EU AI Act provisions.',complete:false,attachments:[]},
+  {id:uid(),name:'dotBloom — Anthropic article draft',status:'',context:'',complete:false,attachments:[]},
+  {id:uid(),name:'Review Fordham checklist',status:'waiting on docs',context:'',complete:true,attachments:[]},
+]};
+
+function Attachments({attachments, onChange}) {
+  const [link,setLink]=useState('');
+  const [over,setOver]=useState(false);
+  const addFiles=(files)=>{
+    const news=Array.from(files).map(f=>({id:uid(),name:f.name,size:f.size,type:'file',url:null}));
+    onChange([...attachments,...news]);
+  };
+  const addLink=()=>{
+    if(!link.trim()) return;
+    const url=link.trim();
+    const label=url.replace(/^https?:\/\//,'').split('/')[0];
+    onChange([...attachments,{id:uid(),name:label,url,type:'link',size:null}]);
+    setLink('');
+  };
+  const remove=(id)=>onChange(attachments.filter(a=>a.id!==id));
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:'10px'}}>
+      <div className={'drop-zone'+(over?' over':'')}
+        onDragOver={e=>{e.preventDefault();setOver(true);}}
+        onDragLeave={()=>setOver(false)}
+        onDrop={e=>{e.preventDefault();setOver(false);addFiles(e.dataTransfer.files);}}>
+        <input type="file" multiple onChange={e=>addFiles(e.target.files)} />
+        <div className="drop-zone-icon">📁</div>
+        <div className="drop-zone-label">Drop files or click to browse</div>
+        <div className="drop-zone-sub">Files will sync to cloud storage once connected</div>
+      </div>
+      <div className="link-row">
+        <input className="modal-input" placeholder="Paste a link (Google Drive, Notion, Dropbox...)" value={link} onChange={e=>setLink(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addLink()} />
+        <button className="btn sm" onClick={addLink}>Add Link</button>
+      </div>
+      {attachments.length>0&&(
+        <div className="attachment-list">
+          {attachments.map(a=>{
+            const {icon,cls}=a.type==='link'?{icon:'🔗',cls:'lnk'}:fileIcon(a.name);
+            return (
+              <div key={a.id} className="attachment-item">
+                <div className={'attach-icon '+cls}>{icon}</div>
+                <div className="attach-info">
+                  <div className="attach-name">{a.name}</div>
+                  <div className="attach-meta">{a.type==='link'?a.url:fmtSize(a.size)+' · pending upload'}</div>
+                </div>
+                <button className="attach-remove" onClick={()=>remove(a.id)}>✕</button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ConfirmDeleteModal({taskName, onConfirm, onCancel}) {
+  return (
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onCancel()}>
+      <div className="modal confirm-modal">
+        <div className="modal-header">
+          <div className="modal-task-name">Delete this task?</div>
+          <button className="modal-close" onClick={onCancel}>✕</button>
+        </div>
+        <p style={{fontSize:'13px',color:'var(--text2)',lineHeight:1.6}}>
+          <strong style={{color:'var(--text)'}}>{taskName}</strong> will be permanently removed. This can't be undone.
+        </p>
+        <div className="modal-footer">
+          <div />
+          <div className="modal-footer-right">
+            <button className="btn" onClick={onCancel}>Cancel</button>
+            <button className="btn danger" onClick={onConfirm}>Delete Task</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TaskModal({task, onClose, onSave, onDelete}) {
+  const [name,setName]=useState(task.name);
+  const [status,setStatus]=useState(task.status);
+  const [context,setContext]=useState(task.context);
+  const [attachments,setAttachments]=useState(task.attachments||[]);
+  const [confirming,setConfirming]=useState(false);
+
+  if (confirming) return (
+    <ConfirmDeleteModal
+      taskName={task.name}
+      onConfirm={onDelete}
+      onCancel={()=>setConfirming(false)}
+    />
+  );
+
+  return (
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="modal">
+        <div className="modal-header">
+          <div className="modal-task-name">{name||'Untitled Task'}</div>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-field">
+          <label>Task Name</label>
+          <input className="modal-input" value={name} onChange={e=>setName(e.target.value)} placeholder="What needs doing?" />
+        </div>
+        <div className="modal-field">
+          <label>Status</label>
+          <input className="modal-input" value={status} onChange={e=>setStatus(e.target.value)} placeholder="e.g. in progress, waiting on, blocked..." />
+        </div>
+        <div className="modal-field">
+          <label>Context & Notes</label>
+          <textarea className="modal-textarea" value={context} onChange={e=>setContext(e.target.value)} placeholder="Add any context, links, or notes here..." />
+        </div>
+        <div className="modal-divider" />
+        <div className="modal-field">
+          <label>Attachments{attachments.length>0?' · '+attachments.length:''}</label>
+          <Attachments attachments={attachments} onChange={setAttachments} />
+        </div>
+        <div className="modal-footer">
+          <button className="trash-btn" onClick={()=>setConfirming(true)}>🗑 Delete</button>
+          <div className="modal-footer-right">
+            <button className="btn" onClick={onClose}>Cancel</button>
+            <button className="btn primary" onClick={()=>{onSave({...task,name,status,context,attachments});onClose();}}>Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const CLIENT_ID = '992169341355-40u7rg338i4jrhmrbu5hivedkvd0dqqs.apps.googleusercontent.com';
+const SCOPES = 'https://www.googleapis.com/auth/calendar.events';
+
+function getAccessToken() {
+  return new Promise((resolve, reject) => {
+    if (!window.google) { reject(new Error('Google Identity Services not loaded')); return; }
+    const client = window.google.accounts.oauth2.initTokenClient({
+      client_id: CLIENT_ID,
+      scope: SCOPES,
+      callback: (resp) => {
+        if (resp.error) reject(new Error(resp.error));
+        else resolve(resp.access_token);
+      },
+    });
+    client.requestAccessToken();
+  });
+}
+
+async function pushToCalendar(date, tasks, startTime, endTime) {
+  const token = await getAccessToken();
+  const dateStr = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+  const taskList = tasks.filter(t=>!t.complete).map(t=>`• ${t.name}`).join('\n');
+  const appUrl = window.location.href;
+  const description = `TaskBloc — tasks for ${dateStr}\n\n${taskList}\n\n🔗 Open TaskBloc: ${appUrl}`;
+  const event = {
+    summary: 'Task Bloc',
+    description,
+    start: { dateTime: `${dateStr}T${startTime}:00`, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
+    end:   { dateTime: `${dateStr}T${endTime}:00`,   timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
+  };
+  const resp = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(event),
+  });
+  if (!resp.ok) throw new Error('Calendar API error: ' + resp.status);
+  return await resp.json();
+}
+
+function DumpModal({onClose, taskCount, date, tasks}) {
+  const [start,setStart]=useState('10:00');
+  const [end,setEnd]=useState('11:00');
+  const [status,setStatus]=useState('idle'); // idle | loading | success | error
+  const [errMsg,setErrMsg]=useState('');
+
+  const handleDump = async () => {
+    setStatus('loading');
+    try {
+      await pushToCalendar(date, tasks, start, end);
+      setStatus('success');
+    } catch(e) {
+      setErrMsg(e.message||'Something went wrong.');
+      setStatus('error');
+    }
+  };
+
+  if (status==='success') return (
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="modal dump-modal-inner" style={{gap:14}}>
+        <div className="modal-header">
+          <div className="modal-task-name" style={{color:'var(--accent2)'}}>Sent! ✓</div>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+        <p style={{fontSize:'13px',color:'var(--text2)',lineHeight:1.6}}><strong>Task Bloc</strong> has been added to your Google Calendar with {taskCount} task{taskCount!==1?'s':''} in the description.</p>
+        <div className="modal-footer"><div/><div className="modal-footer-right"><button className="btn primary" onClick={onClose}>Done</button></div></div>
+      </div>
+    </div>
+  );
+
+  if (status==='error') return (
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="modal dump-modal-inner" style={{gap:14}}>
+        <div className="modal-header">
+          <div className="modal-task-name" style={{color:'#c0392b'}}>Something went wrong</div>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+        <p style={{fontSize:'13px',color:'var(--text2)',lineHeight:1.6}}>{errMsg}</p>
+        <div className="modal-footer"><div/><div className="modal-footer-right"><button className="btn" onClick={()=>setStatus('idle')}>Try Again</button><button className="btn" onClick={onClose}>Close</button></div></div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="modal dump-modal-inner">
+        <div className="modal-header">
+          <div className="modal-task-name">Send to Calendar</div>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+        <p style={{fontSize:'12px',color:'var(--text2)',lineHeight:1.6,marginTop:'-8px'}}>Creates a <em>Task Bloc</em> event with {taskCount} task{taskCount!==1?'s':''} in the description and a link back to this app.</p>
+        <div className="modal-field">
+          <label>Event Time</label>
+          <div className="time-row">
+            <input className="modal-input" type="time" value={start} onChange={e=>setStart(e.target.value)} />
+            <span style={{color:'var(--text3)',fontSize:'12px',fontStyle:'italic'}}>to</span>
+            <input className="modal-input" type="time" value={end} onChange={e=>setEnd(e.target.value)} />
+          </div>
+        </div>
+        <div className="modal-footer">
+          <div/>
+          <div className="modal-footer-right">
+            <button className="btn" onClick={onClose} disabled={status==='loading'}>Cancel</button>
+            <button className="btn dump" onClick={handleDump} disabled={status==='loading'}>
+              {status==='loading' ? 'Sending…' : 'Send to Calendar →'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TaskItem({task, onToggle, onOpen, onDragStart, onDragOver, onDrop, isDragging, isDragOver}) {
+  return (
+    <div
+      className={'task-item'+(isDragging?' dragging':'')+(isDragOver?' drag-over':'')+(task.complete?' complete':'')}
+      draggable onDragStart={e=>onDragStart(e,task.id)}
+      onDragOver={e=>{e.preventDefault();onDragOver(task.id);}}
+      onDrop={e=>{e.preventDefault();onDrop(task.id);}}>
+      <span className="task-drag-handle">⠿</span>
+      <div className={'task-check'+(task.complete?' checked':'')} onClick={()=>onToggle(task.id)} />
+      <div className="task-body">
+        <div className="task-name">{task.name}</div>
+        {task.status&&<div className="task-status">{task.status}</div>}
+      </div>
+      <div className="task-meta">
+        {(task.attachments||[]).length>0&&<span className="task-attach-badge">📎 {task.attachments.length}</span>}
+        <button className="task-open-btn" onClick={()=>onOpen(task)}>↗</button>
+      </div>
+    </div>
+  );
+}
+
+function DayBlock({date, tasks, isToday, onAddTask, onToggle, onOpen, onUpdateTasks, onMoveTask}) {
+  const [newName,setNewName]=useState('');
+  const [dragOver,setDragOver]=useState(null);
+  const [draggingId,setDraggingId]=useState(null);
+  const [zoneActive,setZoneActive]=useState(false);
+  const [showDump,setShowDump]=useState(false);
+  const key=dk(date);
+
+  const hDragStart=(e,id)=>{setDraggingId(id);e.dataTransfer.setData('taskId',id);e.dataTransfer.setData('fromDay',key);};
+  const hDrop=(tid)=>{
+    if(!draggingId||draggingId===tid){setDraggingId(null);setDragOver(null);return;}
+    const fi=tasks.findIndex(t=>t.id===draggingId),ti=tasks.findIndex(t=>t.id===tid);
+    if(fi===-1||ti===-1) return;
+    const arr=[...tasks];const[m]=arr.splice(fi,1);arr.splice(ti,0,m);
+    onUpdateTasks(key,arr);setDraggingId(null);setDragOver(null);
+  };
+  const hZoneDrop=(e)=>{
+    e.preventDefault();
+    const taskId=e.dataTransfer.getData('taskId'),fromDay=e.dataTransfer.getData('fromDay');
+    if(fromDay&&fromDay!==key) onMoveTask(fromDay,key,taskId);
+    setZoneActive(false);
+  };
+  const add=()=>{if(!newName.trim())return;onAddTask(key,newName.trim());setNewName('');};
+  const inc=tasks.filter(t=>!t.complete).length,com=tasks.filter(t=>t.complete).length;
+
+  return (
+    <>
+      <div className="today-block">
+        <div className="block-header">
+          <div>
+            <div className="block-title">
+              {isToday?'Today':DAYS[date.getDay()]}
+              <span className="date-sub">{DAYS[date.getDay()]}, {MONTHS[date.getMonth()]} {date.getDate()}{tasks.length>0&&' · '+inc+' open'+(com>0?', '+com+' done':'')}</span>
+            </div>
+          </div>
+          <button className="btn dump" onClick={()=>setShowDump(true)}>send to calendar</button>
+        </div>
+        <div className="add-task-row">
+          <input className="add-task-input" placeholder="Add a task for this day..." value={newName} onChange={e=>setNewName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&add()} />
+          <button className="btn primary" onClick={add}>Add</button>
+        </div>
+        <div className="task-list">
+          {tasks.length===0&&<div style={{fontSize:'13px',color:'var(--text3)',fontStyle:'italic',padding:'8px 4px'}}>Nothing here yet — add something above.</div>}
+          {tasks.map(t=>(
+            <TaskItem key={t.id} task={t}
+              onToggle={id=>onToggle(key,id)} onOpen={onOpen}
+              onDragStart={hDragStart} onDragOver={setDragOver} onDrop={hDrop}
+              isDragging={draggingId===t.id} isDragOver={dragOver===t.id} />
+          ))}
+        </div>
+        <div className={'day-drop-zone'+(zoneActive?' active':'')}
+          onDragOver={e=>{e.preventDefault();setZoneActive(true);}}
+          onDragLeave={()=>setZoneActive(false)} onDrop={hZoneDrop}>
+          drag a task here from another day
+        </div>
+      </div>
+      {showDump&&<DumpModal taskCount={inc} date={date} tasks={tasks} onClose={()=>setShowDump(false)} />}
+    </>
+  );
+}
+
+function LookingForward({items, onDrop, onRemove, onOpen}) {
+  const [active,setActive]=useState(false);
+  const handleDrop=(e)=>{
+    e.preventDefault();
+    const taskId=e.dataTransfer.getData('taskId'),fromDay=e.dataTransfer.getData('fromDay');
+    if(taskId&&fromDay) onDrop(fromDay,taskId);
+    setActive(false);
+  };
+  return (
+    <div className={'looking-forward'+(active?' drop-active':'')}
+      onDragOver={e=>{e.preventDefault();setActive(true);}}
+      onDragLeave={()=>setActive(false)}
+      onDrop={handleDrop}>
+      <div className="lf-header">
+        <div className="lf-title">Looking Forward</div>
+      </div>
+      <div className="lf-subtitle">Tasks beyond this week — drag anything here to park it for later.</div>
+      {items.length===0?(
+        <div className="lf-drop-hint">Drop tasks here to save them for later</div>
+      ):(
+        <>
+          {items.map(t=>(
+            <div key={t.id} className="lf-task-item">
+              <span className="lf-dot" />
+              <span className="lf-task-name">{t.name}</span>
+              {t.status&&<span style={{fontSize:'11px',color:'var(--purple)',fontStyle:'italic',flexShrink:0}}>{t.status}</span>}
+              {(t.attachments||[]).length>0&&<span style={{fontSize:'11px',color:'var(--text3)',flexShrink:0}}>📎 {t.attachments.length}</span>}
+              <button className="task-open-btn" style={{flexShrink:0}} onClick={()=>onOpen(t)}>↗</button>
+              <button className="lf-task-remove" onClick={()=>onRemove(t.id)}>✕</button>
+            </div>
+          ))}
+          <div className="lf-drop-hint" style={{marginTop:'8px'}}>Drop more tasks here</div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function App() {
+  const days=next8();
+  const [tasks,setTasks]=useState(()=>{try{return JSON.parse(localStorage.getItem('taskbloc_tasks'))||SEED;}catch{return SEED;}});
+  const [forward,setForward]=useState(()=>{try{return JSON.parse(localStorage.getItem('taskbloc_forward'))||[];}catch{return [];}});
+  const [sel,setSel]=useState(0);
+  const [editing,setEditing]=useState(null);
+  const [editingForward,setEditingForward]=useState(null);
+
+  useEffect(()=>{localStorage.setItem('taskbloc_tasks',JSON.stringify(tasks));},[tasks]);
+  useEffect(()=>{localStorage.setItem('taskbloc_forward',JSON.stringify(forward));},[forward]);
+
+  const addTask=(k,n)=>setTasks(p=>({...p,[k]:[...(p[k]||[]),{id:uid(),name:n,status:'',context:'',complete:false,attachments:[]}]}));
+  const toggleTask=(k,id)=>setTasks(p=>({...p,[k]:(p[k]||[]).map(t=>t.id===id?{...t,complete:!t.complete}:t)}));
+  const saveTask=(k,u)=>setTasks(p=>({...p,[k]:(p[k]||[]).map(t=>t.id===u.id?u:t)}));
+  const updTasks=(k,a)=>setTasks(p=>({...p,[k]:a}));
+  const deleteTask=(k,id)=>{setTasks(p=>({...p,[k]:(p[k]||[]).filter(t=>t.id!==id)}));setEditing(null);};
+  const movTask=(f,t,id)=>setTasks(p=>{const task=(p[f]||[]).find(x=>x.id===id);if(!task)return p;return{...p,[f]:(p[f]||[]).filter(x=>x.id!==id),[t]:[...(p[t]||[]),task]};});
+
+  // Move task to Looking Forward
+  const moveToForward=(fromDay,taskId)=>{
+    const task=(tasks[fromDay]||[]).find(t=>t.id===taskId);
+    if(!task) return;
+    setTasks(p=>({...p,[fromDay]:(p[fromDay]||[]).filter(t=>t.id!==taskId)}));
+    setForward(p=>[...p,task]);
+  };
+
+  const removeFromForward=(id)=>setForward(p=>p.filter(t=>t.id!==id));
+  const saveForwardTask=(u)=>setForward(p=>p.map(t=>t.id===u.id?u:t));
+  const deleteForwardTask=(id)=>{setForward(p=>p.filter(t=>t.id!==id));setEditingForward(null);};
+
+  const cur=days[sel],ck=dk(cur),ct=tasks[ck]||[];
+
+  return (
+    <div className="app">
+      <div className="sidebar">
+        <div className="sidebar-logo">TaskBloc</div>
+        <div className="sidebar-logo-sub">your days, organized</div>
+        <div className="sidebar-section-label">This Week</div>
+        {days.map((d,i)=>{
+          const k=dk(d),count=(tasks[k]||[]).length,done=(tasks[k]||[]).filter(t=>t.complete).length;
+          return (
+            <div key={k} className={'sidebar-day'+(i===0?' today':'')+(sel===i?' active':'')} onClick={()=>setSel(i)}>
+              <div className="sidebar-day-label">{i===0?'Today':DAYS[d.getDay()]}</div>
+              <div className="sidebar-day-date">{MS[d.getMonth()]} {d.getDate()}</div>
+              {count>0&&<div className="sidebar-day-count">{done}/{count} complete</div>}
+            </div>
+          );
+        })}
+        {forward.length>0&&(
+          <>
+            <div className="sidebar-section-label" style={{color:'var(--purple)'}}>Looking Forward</div>
+            <div className="sidebar-day" style={{borderColor:'transparent',cursor:'default'}}>
+              <div className="sidebar-day-count" style={{color:'var(--purple)',fontSize:'11px'}}>{forward.length} task{forward.length!==1?'s':''} parked</div>
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="main">
+        <DayBlock date={cur} tasks={ct} isToday={sel===0}
+          onAddTask={addTask} onToggle={toggleTask}
+          onOpen={t=>setEditing({task:t,dayKey:ck})}
+          onUpdateTasks={updTasks} onMoveTask={movTask} />
+
+        <div className="week-strip">
+          <div className="strip-label">Coming Up</div>
+          <div className="week-days">
+            {days.slice(1).map((d,i)=>{
+              const k=dk(d),dt=tasks[k]||[];
+              return (
+                <div key={k} className="week-day-card" onClick={()=>setSel(i+1)}
+                  onDragOver={e=>{e.preventDefault();e.currentTarget.classList.add('drag-target');}}
+                  onDragLeave={e=>e.currentTarget.classList.remove('drag-target')}
+                  onDrop={e=>{e.preventDefault();e.currentTarget.classList.remove('drag-target');const tid=e.dataTransfer.getData('taskId'),fd=e.dataTransfer.getData('fromDay');if(fd&&fd!==k)movTask(fd,k,tid);}}>
+                  <div className="week-day-header">
+                    <div><div className="week-day-name">{DAYS[d.getDay()]}</div><div className="week-day-month">{MS[d.getMonth()]}</div></div>
+                    <div className="week-day-date-num">{d.getDate()}</div>
+                  </div>
+                  {dt.length===0?<div className="week-empty">clear</div>:dt.map(t=>(
+                    <div key={t.id} className={'week-task-pill'+(t.complete?' complete':'')}><span className="week-task-pill-dot"/>{t.name}</div>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <LookingForward
+          items={forward}
+          onDrop={moveToForward}
+          onRemove={removeFromForward}
+          onOpen={t=>setEditingForward(t)}
+        />
+      </div>
+
+      {editing&&(
+        <TaskModal task={editing.task} onClose={()=>setEditing(null)}
+          onSave={u=>{saveTask(editing.dayKey,u);setEditing(null);}}
+          onDelete={()=>deleteTask(editing.dayKey,editing.task.id)} />
+      )}
+      {editingForward&&(
+        <TaskModal task={editingForward} onClose={()=>setEditingForward(null)}
+          onSave={u=>{saveForwardTask(u);setEditingForward(null);}}
+          onDelete={()=>deleteForwardTask(editingForward.id)} />
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
