@@ -207,6 +207,14 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Nunito
 .sync-dot.err{background:#c0392b;}
 .sync-dot.syncing{background:var(--gold);animation:pulse 1s infinite;}
 @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+.sync-btn{background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:0 4px;margin-left:4px;transition:transform .3s;line-height:1;}
+.sync-btn:hover{color:var(--accent);}
+.sync-btn:disabled{opacity:.4;cursor:default;}
+.sync-btn:active{transform:rotate(180deg);}
+.pull-indicator{text-align:center;font-size:11px;color:var(--text3);font-style:italic;overflow:hidden;transition:height .2s;display:flex;align-items:center;justify-content:center;gap:6px;}
+.pull-spinner{font-size:16px;display:inline-block;}
+.pull-spinner.spin{animation:spin .6s linear infinite;}
+@keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
 
 /* MOBILE */
 .mob-nav{display:none;}
@@ -443,7 +451,7 @@ function LookingForward({items,onDrop,onRemove,onOpen,onAdd}){
   </div>);
 }
 
-function SyncStatus({status}){
+function SyncStatus({status,onSync}){
   const [online,setOnline]=React.useState(navigator.onLine);
   React.useEffect(()=>{
     const on=()=>setOnline(true);
@@ -455,7 +463,13 @@ function SyncStatus({status}){
   if(!online)return(<div className="sync-bar"><div className="sync-dot err"/><span>offline — changes will sync when reconnected</span></div>);
   const cls=status==='ok'?'ok':status==='error'?'err':status==='syncing'?'syncing':'';
   const label=status==='ok'?'synced':status==='error'?'sync error':status==='syncing'?'syncing…':'connecting…';
-  return(<div className="sync-bar"><div className={'sync-dot '+cls}/><span>{label}</span></div>);
+  return(
+    <div className="sync-bar">
+      <div className={'sync-dot '+cls}/>
+      <span>{label}</span>
+      <button className="sync-btn" onClick={onSync} disabled={status==='syncing'} title="Sync now">↻</button>
+    </div>
+  );
 }
 
 function App(){
@@ -469,6 +483,39 @@ function App(){
   const [syncStatus,setSyncStatus]=useState('loading');
   const saveTimer=useRef(null);
   const mainRef=useRef(null);
+  const pullStartY=useRef(null);
+  const [pullDistance,setPullDistance]=useState(0);
+  const PULL_THRESHOLD=70;
+
+  const manualSync=async()=>{
+    if(syncStatus==='syncing')return;
+    setSyncStatus('syncing');
+    try{
+      await qFlush();
+      const[t,f]=await Promise.all([dbLoadTasks(),dbLoadForward()]);
+      setTasks(t);setForward(f);setSyncStatus('ok');
+    }catch(e){console.error(e);setSyncStatus('error');}
+  };
+
+  // Pull to refresh
+  useEffect(()=>{
+    const el=mainRef.current;
+    if(!el)return;
+    const onStart=e=>{if(el.scrollTop===0)pullStartY.current=e.touches[0].clientY;};
+    const onMove=e=>{
+      if(pullStartY.current===null)return;
+      const dist=e.touches[0].clientY-pullStartY.current;
+      if(dist>0&&el.scrollTop===0){e.preventDefault();setPullDistance(Math.min(dist,PULL_THRESHOLD+20));}
+    };
+    const onEnd=()=>{
+      if(pullDistance>=PULL_THRESHOLD)manualSync();
+      pullStartY.current=null;setPullDistance(0);
+    };
+    el.addEventListener('touchstart',onStart,{passive:true});
+    el.addEventListener('touchmove',onMove,{passive:false});
+    el.addEventListener('touchend',onEnd);
+    return()=>{el.removeEventListener('touchstart',onStart);el.removeEventListener('touchmove',onMove);el.removeEventListener('touchend',onEnd);};
+  },[pullDistance,syncStatus]);
 
   useEffect(()=>{(async()=>{try{const[t,f]=await Promise.all([dbLoadTasks(),dbLoadForward()]);setTasks(t);setForward(f);setSyncStatus('ok');}catch(e){console.error(e);setSyncStatus('error');}})();},[]);
 
@@ -531,15 +578,16 @@ function App(){
     <div className="sidebar">
       <div className="sidebar-logo">TaskBloc</div>
       <div className="sidebar-sub">your days, organized</div>
-      <SyncStatus status={syncStatus}/>
+      <SyncStatus status={syncStatus} onSync={manualSync}/>
       <div className="sidebar-section">This Week</div>
       {sidebarDays}
       {forward.length>0&&<><div className="sidebar-section" style={{color:'var(--purple)'}}>Looking Forward</div><div className="s-day" style={{cursor:'default'}}><div className="s-day-count" style={{color:'var(--purple)',fontSize:'10px'}}>{forward.length} task{forward.length!==1?'s':''} parked</div></div></>}
     </div>
 
     <div className="main" ref={mainRef}>
+      {pullDistance>0&&<div className="pull-indicator" style={{height:pullDistance+'px'}}><span className={'pull-spinner'+(pullDistance>=PULL_THRESHOLD?' spin':'')}>↻</span><span>{pullDistance>=PULL_THRESHOLD?'release to sync':'pull to sync'}</span></div>}
       {mobTab==='today'&&<>
-        <SyncStatus status={syncStatus}/>
+        <SyncStatus status={syncStatus} onSync={manualSync}/>
         <DayBlock date={cur} tasks={ct} isToday={sel===0} onAdd={addTask} onToggle={toggleTask} onOpen={t=>setEditing({task:t,dayKey:ck})} onUpdateTasks={updTasks} onMoveTask={movTask}/>
         {weekStrip}
         <LookingForward items={forward} onDrop={moveToFwd} onRemove={remFwd} onOpen={t=>setEditFwd(t)} onAdd={addFwd}/>
