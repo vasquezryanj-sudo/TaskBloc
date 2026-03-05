@@ -262,12 +262,71 @@ async function pushCal(date,tasks){
   return r.json();
 }
 
-async function dbLoadTasks(){const{data,error}=await sb.from('tasks').select('*').order('position');if(error)throw error;const map={};(data||[]).forEach(r=>{if(!map[r.day_key])map[r.day_key]=[];map[r.day_key].push({id:r.id,name:r.name,status:r.status,context:r.context,complete:r.complete,attachments:r.attachments||[]});});return map;}
-async function dbLoadForward(){const{data,error}=await sb.from('forward_tasks').select('*').order('position');if(error)throw error;return(data||[]).map(r=>({id:r.id,name:r.name,status:r.status,context:r.context,complete:r.complete,attachments:r.attachments||[]}));}
-async function dbUpsertTask(task,dayKey,position){return sb.from('tasks').upsert({id:task.id,day_key:dayKey,name:task.name,status:task.status,context:task.context,complete:task.complete,attachments:task.attachments,position});}
-async function dbDeleteTask(id){return sb.from('tasks').delete().eq('id',id);}
-async function dbUpsertForward(task,position){return sb.from('forward_tasks').upsert({id:task.id,name:task.name,status:task.status,context:task.context,complete:task.complete,attachments:task.attachments,position});}
-async function dbDeleteForward(id){return sb.from('forward_tasks').delete().eq('id',id);}
+// ── OFFLINE QUEUE ──
+const QUEUE_KEY='taskbloc_queue';
+function qLoad(){try{return JSON.parse(localStorage.getItem(QUEUE_KEY))||[];}catch{return[];}}
+function qSave(q){localStorage.setItem(QUEUE_KEY,JSON.stringify(q));}
+function qAdd(op){const q=qLoad();q.push(op);qSave(q);}
+
+async function qFlush(){
+  if(!navigator.onLine)return;
+  const q=qLoad();
+  if(q.length===0)return;
+  qSave([]); // optimistically clear
+  try{
+    await Promise.all(q.map(op=>{
+      if(op.type==='upsertTask')return sb.from('tasks').upsert(op.data);
+      if(op.type==='deleteTask')return sb.from('tasks').delete().eq('id',op.id);
+      if(op.type==='upsertForward')return sb.from('forward_tasks').upsert(op.data);
+      if(op.type==='deleteForward')return sb.from('forward_tasks').delete().eq('id',op.id);
+    }));
+  }catch(e){
+    // restore queue if flush fails
+    const remaining=qLoad();
+    qSave([...q,...remaining]);
+    throw e;
+  }
+}
+
+// Flush queue whenever we come back online
+window.addEventListener('online',()=>qFlush().catch(console.error));
+
+async function dbLoadTasks(){
+  if(!navigator.onLine){
+    // Return cached data from localStorage if offline
+    try{return JSON.parse(localStorage.getItem('taskbloc_tasks'))||{};}catch{return{};}
+  }
+  const{data,error}=await sb.from('tasks').select('*').order('position');
+  if(error)throw error;
+  const map={};(data||[]).forEach(r=>{if(!map[r.day_key])map[r.day_key]=[];map[r.day_key].push({id:r.id,name:r.name,status:r.status,context:r.context,complete:r.complete,attachments:r.attachments||[]});});
+  return map;
+}
+async function dbLoadForward(){
+  if(!navigator.onLine){
+    try{return JSON.parse(localStorage.getItem('taskbloc_forward'))||[];}catch{return[];}
+  }
+  const{data,error}=await sb.from('forward_tasks').select('*').order('position');
+  if(error)throw error;
+  return(data||[]).map(r=>({id:r.id,name:r.name,status:r.status,context:r.context,complete:r.complete,attachments:r.attachments||[]}));
+}
+async function dbUpsertTask(task,dayKey,position){
+  const data={id:task.id,day_key:dayKey,name:task.name,status:task.status,context:task.context,complete:task.complete,attachments:task.attachments,position};
+  if(!navigator.onLine){qAdd({type:'upsertTask',data});return;}
+  try{await sb.from('tasks').upsert(data);}catch(e){qAdd({type:'upsertTask',data});throw e;}
+}
+async function dbDeleteTask(id){
+  if(!navigator.onLine){qAdd({type:'deleteTask',id});return;}
+  try{await sb.from('tasks').delete().eq('id',id);}catch(e){qAdd({type:'deleteTask',id});throw e;}
+}
+async function dbUpsertForward(task,position){
+  const data={id:task.id,name:task.name,status:task.status,context:task.context,complete:task.complete,attachments:task.attachments,position};
+  if(!navigator.onLine){qAdd({type:'upsertForward',data});return;}
+  try{await sb.from('forward_tasks').upsert(data);}catch(e){qAdd({type:'upsertForward',data});throw e;}
+}
+async function dbDeleteForward(id){
+  if(!navigator.onLine){qAdd({type:'deleteForward',id});return;}
+  try{await sb.from('forward_tasks').delete().eq('id',id);}catch(e){qAdd({type:'deleteForward',id});throw e;}
+}
 
 function Attachments({attachments,onChange}){
   const [link,setLink]=useState('');const [over,setOver]=useState(false);
@@ -385,6 +444,15 @@ function LookingForward({items,onDrop,onRemove,onOpen,onAdd}){
 }
 
 function SyncStatus({status}){
+  const [online,setOnline]=React.useState(navigator.onLine);
+  React.useEffect(()=>{
+    const on=()=>setOnline(true);
+    const off=()=>setOnline(false);
+    window.addEventListener('online',on);
+    window.addEventListener('offline',off);
+    return()=>{window.removeEventListener('online',on);window.removeEventListener('offline',off);};
+  },[]);
+  if(!online)return(<div className="sync-bar"><div className="sync-dot err"/><span>offline — changes will sync when reconnected</span></div>);
   const cls=status==='ok'?'ok':status==='error'?'err':status==='syncing'?'syncing':'';
   const label=status==='ok'?'synced':status==='error'?'sync error':status==='syncing'?'syncing…':'connecting…';
   return(<div className="sync-bar"><div className={'sync-dot '+cls}/><span>{label}</span></div>);
@@ -492,6 +560,14 @@ function App(){
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/TaskBloc/sw.js')
+      .then(r => console.log('SW registered:', r.scope))
+      .catch(e => console.log('SW failed:', e));
+  });
+}
 </script>
 </body>
 </html>
