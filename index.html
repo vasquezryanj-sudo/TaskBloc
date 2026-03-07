@@ -111,6 +111,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Nunito
 .task-status{font-size:10px;color:var(--accent);margin-top:2px;font-style:italic;font-weight:500;}
 .task-meta{display:flex;align-items:center;gap:5px;flex-shrink:0;}
 .attach-badge{font-size:10px;color:var(--text3);}
+.time-tag{font-size:10px;color:var(--text2);background:var(--surface3);border-radius:6px;padding:2px 6px;font-weight:600;flex-shrink:0;}
 .open-btn{background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:3px 5px;border-radius:6px;transition:all .12s;flex-shrink:0;}
 .open-btn:hover{color:var(--accent);background:var(--accent-light);}
 
@@ -254,6 +255,10 @@ const sb=supabase.createClient(SUPA_URL,SUPA_KEY);
 const next8=()=>Array.from({length:8},(_,i)=>{const d=new Date();d.setDate(d.getDate()+i);return d;});
 const dk=d=>d.getFullYear()+'-'+d.getMonth()+'-'+d.getDate();
 const uid=()=>Math.random().toString(36).slice(2);
+const TIME_OPTS=['','<5m','5m','10m','15m','30m','1hr'];
+function timeToMins(t){if(!t)return 0;if(t==='<5m')return 5;if(t==='5m')return 5;if(t==='10m')return 10;if(t==='15m')return 15;if(t==='30m')return 30;if(t==='1hr')return 60;return 0;}
+function totalMins(tasks){return tasks.filter(t=>!t.complete).reduce((s,t)=>s+timeToMins(t.estimate),0);}
+function fmtMins(m){if(!m)return'';if(m<60)return m+'m';const h=Math.floor(m/60),r=m%60;return r?h+'h '+r+'m':h+'h';}
 const fIcon=n=>{if(!n)return{icon:'🔗',cls:'lnk'};const e=n.split('.').pop().toLowerCase();if(['jpg','jpeg','png','gif','webp','svg'].includes(e))return{icon:'🖼',cls:'img'};if(e==='pdf')return{icon:'📄',cls:'pdf'};if(['doc','docx','txt','md'].includes(e))return{icon:'📝',cls:'doc'};return{icon:'📎',cls:'def'};};
 const fmtSize=b=>{if(!b)return'';if(b<1024)return b+' B';if(b<1048576)return(b/1024).toFixed(1)+' KB';return(b/1048576).toFixed(1)+' MB';};
 
@@ -263,8 +268,12 @@ function getToken(){return new Promise((res,rej)=>{if(!window.google){rej(new Er
 async function pushCal(date,tasks){
   const token=await getToken();
   const ds=`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
-  const list=tasks.filter(t=>!t.complete).map(t=>`• ${t.name}`).join('\n');
-  const body=JSON.stringify({summary:'Task Bloc',colorId:'6',description:`TaskBloc tasks for ${ds}\n\n${list}\n\n🔗 ${window.location.href}`,start:{dateTime:`${ds}T08:00:00`,timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone},end:{dateTime:`${ds}T09:00:00`,timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone}});
+  const incTasks=tasks.filter(t=>!t.complete);
+  const total=totalMins(incTasks)||60;
+  const endH=Math.floor((8*60+total)/60),endM=(8*60+total)%60;
+  const endStr=`${String(endH).padStart(2,'0')}:${String(endM).padStart(2,'0')}`;
+  const list=incTasks.map(t=>`• ${t.name}${t.estimate?' ('+t.estimate+')':''}`).join('\n');
+  const body=JSON.stringify({summary:'Task Bloc',colorId:'6',description:`TaskBloc tasks for ${ds}\n\n${list}\n\n🔗 ${window.location.href}`,start:{dateTime:`${ds}T08:00:00`,timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone},end:{dateTime:`${ds}T${endStr}:00`,timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone}});
   const r=await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events',{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body});
   if(!r.ok)throw new Error('Calendar API '+r.status);
   return r.json();
@@ -306,7 +315,7 @@ async function dbLoadTasks(){
   }
   const{data,error}=await sb.from('tasks').select('*').order('position');
   if(error)throw error;
-  const map={};(data||[]).forEach(r=>{if(!map[r.day_key])map[r.day_key]=[];map[r.day_key].push({id:r.id,name:r.name,status:r.status,context:r.context,complete:r.complete,attachments:r.attachments||[]});});
+  const map={};(data||[]).forEach(r=>{if(!map[r.day_key])map[r.day_key]=[];map[r.day_key].push({id:r.id,name:r.name,status:r.status,estimate:r.estimate||'',context:r.context,complete:r.complete,attachments:r.attachments||[]});});
   return map;
 }
 async function dbLoadForward(){
@@ -315,10 +324,10 @@ async function dbLoadForward(){
   }
   const{data,error}=await sb.from('forward_tasks').select('*').order('position');
   if(error)throw error;
-  return(data||[]).map(r=>({id:r.id,name:r.name,status:r.status,context:r.context,complete:r.complete,attachments:r.attachments||[]}));
+  return(data||[]).map(r=>({id:r.id,name:r.name,status:r.status,estimate:r.estimate||'',context:r.context,complete:r.complete,attachments:r.attachments||[]}));
 }
 async function dbUpsertTask(task,dayKey,position){
-  const data={id:task.id,day_key:dayKey,name:task.name,status:task.status,context:task.context,complete:task.complete,attachments:task.attachments,position};
+  const data={id:task.id,day_key:dayKey,name:task.name,status:task.status,estimate:task.estimate||'',context:task.context,complete:task.complete,attachments:task.attachments,position};
   if(!navigator.onLine){qAdd({type:'upsertTask',data});return;}
   try{await sb.from('tasks').upsert(data);}catch(e){qAdd({type:'upsertTask',data});throw e;}
 }
@@ -327,7 +336,7 @@ async function dbDeleteTask(id){
   try{await sb.from('tasks').delete().eq('id',id);}catch(e){qAdd({type:'deleteTask',id});throw e;}
 }
 async function dbUpsertForward(task,position){
-  const data={id:task.id,name:task.name,status:task.status,context:task.context,complete:task.complete,attachments:task.attachments,position};
+  const data={id:task.id,name:task.name,status:task.status,estimate:task.estimate||'',context:task.context,complete:task.complete,attachments:task.attachments,position};
   if(!navigator.onLine){qAdd({type:'upsertForward',data});return;}
   try{await sb.from('forward_tasks').upsert(data);}catch(e){qAdd({type:'upsertForward',data});throw e;}
 }
@@ -351,9 +360,9 @@ function Attachments({attachments,onChange}){
 }
 
 function TaskModal({task,onClose,onSave,onDelete}){
-  const [name,setName]=useState(task.name);const [status,setStatus]=useState(task.status);const [context,setContext]=useState(task.context);const [attachments,setAttachments]=useState(task.attachments||[]);const [confirming,setConfirming]=useState(false);
+  const [name,setName]=useState(task.name);const [status,setStatus]=useState(task.status);const [estimate,setEstimate]=useState(task.estimate||'');const [context,setContext]=useState(task.context);const [attachments,setAttachments]=useState(task.attachments||[]);const [confirming,setConfirming]=useState(false);
   if(confirming)return(<div className="overlay" onClick={e=>e.target===e.currentTarget&&setConfirming(false)}><div className="modal" style={{maxWidth:360}}><div className="modal-header"><div className="modal-title">Delete this task?</div><button className="modal-close" onClick={()=>setConfirming(false)}>✕</button></div><p style={{fontSize:'13px',color:'var(--text2)',lineHeight:1.6}}><strong style={{color:'var(--text)'}}>{task.name}</strong> will be permanently removed.</p><div className="modal-footer"><div/><div className="footer-right"><button className="btn" onClick={()=>setConfirming(false)}>Cancel</button><button className="btn danger" onClick={onDelete}>Delete</button></div></div></div></div>);
-  return(<div className="overlay" onClick={e=>e.target===e.currentTarget&&onClose()}><div className="modal"><div className="modal-header"><div className="modal-title">{name||'Untitled'}</div><button className="modal-close" onClick={onClose}>✕</button></div><div className="field"><label>Task Name</label><input className="m-input" value={name} onChange={e=>setName(e.target.value)} placeholder="What needs doing?"/></div><div className="field"><label>Status</label><input className="m-input" value={status} onChange={e=>setStatus(e.target.value)} placeholder="in progress, waiting on, blocked…"/></div><div className="field"><label>Context & Notes</label><textarea className="m-textarea" value={context} onChange={e=>setContext(e.target.value)} placeholder="Notes, links, context…"/></div><div className="divider"/><div className="field"><label>Attachments{attachments.length>0?' · '+attachments.length:''}</label><Attachments attachments={attachments} onChange={setAttachments}/></div><div className="modal-footer"><button className="trash-btn" onClick={()=>setConfirming(true)}>🗑 Delete</button><div className="footer-right"><button className="btn" onClick={onClose}>Cancel</button><button className="btn primary" onClick={()=>{onSave({...task,name,status,context,attachments});onClose();}}>Save</button></div></div></div></div>);
+  return(<div className="overlay" onClick={e=>e.target===e.currentTarget&&onClose()}><div className="modal"><div className="modal-header"><div className="modal-title">{name||'Untitled'}</div><button className="modal-close" onClick={onClose}>✕</button></div><div className="field"><label>Task Name</label><input className="m-input" value={name} onChange={e=>setName(e.target.value)} placeholder="What needs doing?"/></div><div style={{display:'flex',gap:'10px'}}><div className="field" style={{flex:1}}><label>Status</label><input className="m-input" value={status} onChange={e=>setStatus(e.target.value)} placeholder="in progress, waiting on…"/></div><div className="field" style={{width:'110px'}}><label>Est. Time</label><select className="m-select" value={estimate} onChange={e=>setEstimate(e.target.value)}>{TIME_OPTS.map(o=><option key={o} value={o}>{o||'— none —'}</option>)}</select></div></div><div className="field"><label>Context & Notes</label><textarea className="m-textarea" value={context} onChange={e=>setContext(e.target.value)} placeholder="Notes, links, context…"/></div><div className="divider"/><div className="field"><label>Attachments{attachments.length>0?' · '+attachments.length:''}</label><Attachments attachments={attachments} onChange={setAttachments}/></div><div className="modal-footer"><button className="trash-btn" onClick={()=>setConfirming(true)}>🗑 Delete</button><div className="footer-right"><button className="btn" onClick={onClose}>Cancel</button><button className="btn primary" onClick={()=>{onSave({...task,name,status,context,attachments,estimate});onClose();}}>Save</button></div></div></div></div>);
 }
 
 /* DONE BADGES COMPONENT */
@@ -394,7 +403,7 @@ function TaskItem({task,onToggle,onOpen,onDragStart,onDragOver,onDrop,isDragging
     <span className="drag-handle">⠿</span>
     <div className={'task-check'+(task.complete?' on':'')} onClick={handleToggle}/>
     <div className="task-body"><div className="task-name">{task.name}</div>{task.status&&<div className="task-status">{task.status}</div>}</div>
-    <div className="task-meta">{(task.attachments||[]).length>0&&<span className="attach-badge">📎{task.attachments.length}</span>}<button className="open-btn" onClick={()=>onOpen(task)}>↗</button></div>
+    <div className="task-meta">{task.estimate&&<span className="time-tag">{task.estimate}</span>}{(task.attachments||[]).length>0&&<span className="attach-badge">📎{task.attachments.length}</span>}<button className="open-btn" onClick={()=>onOpen(task)}>↗</button></div>
   </div>);
 }
 
@@ -420,7 +429,7 @@ function DayBlock({date,tasks,isToday,onAdd,onToggle,onOpen,onUpdateTasks,onMove
             <div className="block-title">{isToday?'Today':DAYS[date.getDay()]}</div>
             <DoneBadges tasks={tasks}/>
           </div>
-          <div className="block-sub">{DAYS[date.getDay()]}, {MONTHS[date.getMonth()]} {date.getDate()}{inc.length>0&&' · '+inc.length+' open'}</div>
+          <div className="block-sub">{DAYS[date.getDay()]}, {MONTHS[date.getMonth()]} {date.getDate()}{inc.length>0&&' · '+inc.length+' open'}{totalMins(tasks)>0&&' · ~'+fmtMins(totalMins(tasks))}</div>
         </div>
         <button className={'btn gold'+(calStatus==='sent'?' primary':'')} onClick={sendCal} disabled={calStatus==='sending'} style={calStatus==='sent'?{background:'var(--accent2)',borderColor:'var(--accent2)',color:'#fff'}:{}}>{calLabel}</button>
       </div>
@@ -525,14 +534,14 @@ function App(){
     saveTimer.current=setTimeout(async()=>{try{const ops=[];Object.entries(tasksObj).forEach(([dayKey,ts])=>{ts.forEach((t,i)=>ops.push(dbUpsertTask(t,dayKey,i)));});fwdArr.forEach((t,i)=>ops.push(dbUpsertForward(t,i)));await Promise.all(ops);setSyncStatus('ok');}catch(e){console.error(e);setSyncStatus('error');}},800);
   };
 
-  const addTask=(k,n)=>{const task={id:uid(),name:n,status:'',context:'',complete:false,attachments:[]};setTasks(prev=>{const next={...prev,[k]:[...(prev[k]||[]),task]};scheduleSave(next,forward);return next;});};
+  const addTask=(k,n)=>{const task={id:uid(),name:n,status:'',estimate:'',context:'',complete:false,attachments:[]};setTasks(prev=>{const next={...prev,[k]:[...(prev[k]||[]),task]};scheduleSave(next,forward);return next;});};
   const toggleTask=(k,id)=>setTasks(p=>{const next={...p,[k]:(p[k]||[]).map(t=>t.id===id?{...t,complete:!t.complete}:t)};scheduleSave(next,forward);return next;});
   const saveTask=(k,u)=>setTasks(p=>{const next={...p,[k]:(p[k]||[]).map(t=>t.id===u.id?u:t)};scheduleSave(next,forward);return next;});
   const updTasks=(k,a)=>setTasks(p=>{const next={...p,[k]:a};scheduleSave(next,forward);return next;});
   const delTask=(k,id)=>{dbDeleteTask(id);setTasks(p=>{const next={...p,[k]:(p[k]||[]).filter(t=>t.id!==id)};scheduleSave(next,forward);return next;});setEditing(null);};
   const movTask=(f,t,id)=>setTasks(p=>{const task=(p[f]||[]).find(x=>x.id===id);if(!task)return p;const next={...p,[f]:(p[f]||[]).filter(x=>x.id!==id),[t]:[...(p[t]||[]),task]};scheduleSave(next,forward);return next;});
   const moveToFwd=(fd,id)=>{const task=(tasks[fd]||[]).find(t=>t.id===id);if(!task)return;setTasks(prev=>{const next={...prev,[fd]:(prev[fd]||[]).filter(t=>t.id!==id)};const nf=[...forward,task];scheduleSave(next,nf);setForward(nf);return next;});};
-  const addFwd=n=>{const task={id:uid(),name:n,status:'',context:'',complete:false,attachments:[]};setForward(prev=>{const next=[...prev,task];scheduleSave(tasks,next);return next;});};
+  const addFwd=n=>{const task={id:uid(),name:n,status:'',estimate:'',context:'',complete:false,attachments:[]};setForward(prev=>{const next=[...prev,task];scheduleSave(tasks,next);return next;});};
   const remFwd=id=>{dbDeleteForward(id);setForward(p=>{const next=p.filter(t=>t.id!==id);scheduleSave(tasks,next);return next;});};
   const saveFwd=u=>setForward(p=>{const next=p.map(t=>t.id===u.id?u:t);scheduleSave(tasks,next);return next;});
   const delFwd=id=>{dbDeleteForward(id);setForward(p=>{const next=p.filter(t=>t.id!==id);scheduleSave(tasks,next);return next;});setEditFwd(null);};
