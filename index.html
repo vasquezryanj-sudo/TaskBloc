@@ -305,6 +305,45 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Nunito
 .s-reading-link:hover{background:var(--surface2);}
 .s-reading-link.active{background:var(--surface2);border-color:var(--border);}
 .s-reading-link-label{font-size:12px;font-weight:600;color:var(--text2);}
+
+/* TAG CHIPS */
+.tag-chip{display:inline-flex;align-items:center;gap:3px;border-radius:8px;padding:2px 6px;font-size:9px;font-weight:700;line-height:1.3;white-space:nowrap;}
+.tag-chip-x{background:none;border:none;cursor:pointer;padding:0 0 0 2px;font-size:9px;opacity:.6;line-height:1;color:inherit;}
+.tag-chip-x:hover{opacity:1;}
+.estimate-tag{background:var(--gold-light);border:1px solid #e0c070;border-radius:6px;padding:1px 7px;font-size:10px;font-weight:700;color:var(--gold);flex-shrink:0;white-space:nowrap;}
+.task-name-row{display:flex;align-items:center;justify-content:space-between;gap:6px;}
+.task-meta-row{display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-top:3px;}
+.task-date-label{font-size:9px;color:var(--text3);background:var(--surface3);border-radius:5px;padding:1px 5px;font-weight:600;white-space:nowrap;}
+.tag-swatch{width:20px;height:20px;border-radius:50%;border:2.5px solid transparent;cursor:pointer;transition:all .12s;flex-shrink:0;}
+.tag-swatch.sel{transform:scale(1.2);}
+.tag-swatches{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px;}
+.tag-chips-wrap{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px;min-height:22px;}
+
+/* NEXT WEEK */
+.nw-block{background:var(--surface);border:1.5px solid var(--border);border-radius:16px;padding:20px;box-shadow:0 2px 10px var(--shadow);position:relative;}
+.nw-block::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,#3d5af1,#7b97f0);border-radius:16px 16px 0 0;}
+.nw-block.drop-active{border-color:#3d5af1;background:#f4f5fd;}
+.nw-title{font-family:'Lora',serif;font-weight:600;font-size:17px;color:var(--text);margin-bottom:4px;}
+.nw-sub{font-size:11px;color:var(--text3);font-style:italic;margin-bottom:12px;}
+.nw-list{overflow-y:auto;max-height:280px;display:flex;flex-direction:column;gap:6px;margin-bottom:10px;}
+.nw-list::-webkit-scrollbar{width:3px;}
+.nw-list::-webkit-scrollbar-thumb{background:var(--border2);border-radius:10px;}
+.nw-item{background:var(--surface2);border:1.5px solid var(--border);border-radius:10px;padding:9px 12px;display:flex;align-items:center;gap:9px;box-shadow:0 1px 3px var(--shadow);transition:all .15s;flex-shrink:0;cursor:grab;user-select:none;}
+.nw-item:hover{border-color:var(--border2);background:var(--surface);}
+.nw-item.dragging{opacity:.4;cursor:grabbing;}
+.nw-item.drag-over{border-color:#3d5af1;border-style:dashed;background:#f4f5fd;}
+.nw-dot{width:7px;height:7px;border-radius:50%;background:#3d5af1;flex-shrink:0;opacity:.7;}
+.nw-name{flex:1;font-size:13px;font-weight:600;color:var(--text);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.nw-remove{background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;padding:2px 5px;border-radius:5px;transition:all .12s;}
+.nw-remove:hover{color:var(--accent);background:var(--accent-light);}
+.nw-drop-hint{border:2px dashed var(--border);border-radius:10px;padding:14px;text-align:center;font-size:12px;color:var(--text3);font-style:italic;transition:all .15s;}
+.nw-block.drop-active .nw-drop-hint{border-color:#3d5af1;color:#3d5af1;background:rgba(61,90,241,.04);}
+.nw-add-row{display:flex;gap:8px;margin-bottom:10px;}
+.nw-add-input{flex:1;background:var(--surface2);border:1.5px solid var(--border);border-radius:20px;padding:8px 14px;font-family:'Nunito',sans-serif;font-size:13px;color:var(--text);outline:none;transition:border-color .15s;min-width:0;}
+.nw-add-input::placeholder{color:var(--text3);}
+.nw-add-input:focus{border-color:#3d5af1;box-shadow:0 0 0 3px rgba(61,90,241,.1);}
+.btn.navy{background:#eef0fb;border-color:#b0bce8;color:#3d5af1;}
+.btn.navy:hover{background:#e0e4f8;}
 </style>
 </head>
 <body>
@@ -355,6 +394,8 @@ async function qFlush(){
       if(op.type==='deleteTask')return sb.from('tasks').delete().eq('id',op.id);
       if(op.type==='upsertForward')return sb.from('forward_tasks').upsert(op.data);
       if(op.type==='deleteForward')return sb.from('forward_tasks').delete().eq('id',op.id);
+      if(op.type==='upsertNextWeek')return sb.from('next_week').upsert(op.data);
+      if(op.type==='deleteNextWeek')return sb.from('next_week').delete().eq('id',op.id);
     }));
   }catch(e){
     // restore queue if flush fails
@@ -374,7 +415,7 @@ async function dbLoadTasks(){
   }
   const{data,error}=await sb.from('tasks').select('*').order('position');
   if(error)throw error;
-  const map={};(data||[]).forEach(r=>{if(!map[r.day_key])map[r.day_key]=[];map[r.day_key].push({id:r.id,name:r.name,status:r.status,context:r.context,complete:r.complete,attachments:r.attachments||[]});});
+  const map={};(data||[]).forEach(r=>{if(!map[r.day_key])map[r.day_key]=[];map[r.day_key].push({id:r.id,name:r.name,status:r.status,context:r.context,complete:r.complete,attachments:r.attachments||[],tags:r.tags||[],due:r.due||'',start:r.start||'',estimate:r.estimate||''});});
   return map;
 }
 async function dbLoadForward(){
@@ -383,10 +424,10 @@ async function dbLoadForward(){
   }
   const{data,error}=await sb.from('forward_tasks').select('*').order('position');
   if(error)throw error;
-  return(data||[]).map(r=>({id:r.id,name:r.name,status:r.status,context:r.context,complete:r.complete,attachments:r.attachments||[]}));
+  return(data||[]).map(r=>({id:r.id,name:r.name,status:r.status,context:r.context,complete:r.complete,attachments:r.attachments||[],tags:r.tags||[],due:r.due||'',start:r.start||'',estimate:r.estimate||''}));
 }
 async function dbUpsertTask(task,dayKey,position){
-  const data={id:task.id,day_key:dayKey,name:task.name,status:task.status,context:task.context,complete:task.complete,attachments:task.attachments,position};
+  const data={id:task.id,day_key:dayKey,name:task.name,status:task.status,context:task.context,complete:task.complete,attachments:task.attachments,tags:task.tags||[],due:task.due||'',start:task.start||'',estimate:task.estimate||'',position};
   if(!navigator.onLine){qAdd({type:'upsertTask',data});return;}
   try{await sb.from('tasks').upsert(data);}catch(e){qAdd({type:'upsertTask',data});throw e;}
 }
@@ -395,13 +436,28 @@ async function dbDeleteTask(id){
   try{await sb.from('tasks').delete().eq('id',id);}catch(e){qAdd({type:'deleteTask',id});throw e;}
 }
 async function dbUpsertForward(task,position){
-  const data={id:task.id,name:task.name,status:task.status,context:task.context,complete:task.complete,attachments:task.attachments,position};
+  const data={id:task.id,name:task.name,status:task.status,context:task.context,complete:task.complete,attachments:task.attachments,tags:task.tags||[],due:task.due||'',start:task.start||'',estimate:task.estimate||'',position};
   if(!navigator.onLine){qAdd({type:'upsertForward',data});return;}
   try{await sb.from('forward_tasks').upsert(data);}catch(e){qAdd({type:'upsertForward',data});throw e;}
 }
 async function dbDeleteForward(id){
   if(!navigator.onLine){qAdd({type:'deleteForward',id});return;}
   try{await sb.from('forward_tasks').delete().eq('id',id);}catch(e){qAdd({type:'deleteForward',id});throw e;}
+}
+async function dbLoadNextWeek(){
+  if(!navigator.onLine){try{return JSON.parse(localStorage.getItem('taskbloc_nextweek'))||[];}catch{return[];}}
+  const{data,error}=await sb.from('next_week').select('*').order('position');
+  if(error)throw error;
+  return(data||[]).map(r=>({id:r.id,name:r.name,status:r.status,context:r.context,complete:r.complete,attachments:r.attachments||[],tags:r.tags||[],due:r.due||'',start:r.start||'',estimate:r.estimate||''}));
+}
+async function dbUpsertNextWeek(task,position){
+  const data={id:task.id,name:task.name,status:task.status,context:task.context,complete:task.complete,attachments:task.attachments,tags:task.tags||[],due:task.due||'',start:task.start||'',estimate:task.estimate||'',position};
+  if(!navigator.onLine){qAdd({type:'upsertNextWeek',data});return;}
+  try{await sb.from('next_week').upsert(data);}catch(e){qAdd({type:'upsertNextWeek',data});throw e;}
+}
+async function dbDeleteNextWeek(id){
+  if(!navigator.onLine){qAdd({type:'deleteNextWeek',id});return;}
+  try{await sb.from('next_week').delete().eq('id',id);}catch(e){qAdd({type:'deleteNextWeek',id});throw e;}
 }
 
 function Attachments({attachments,onChange}){
@@ -418,10 +474,57 @@ function Attachments({attachments,onChange}){
   </div>);
 }
 
+const TAG_COLORS=['#e74c3c','#e67e22','#f39c12','#27ae60','#1abc9c','#2980b9','#8e44ad','#e91e8c'];
+
 function TaskModal({task,onClose,onSave,onDelete}){
-  const [name,setName]=useState(task.name);const [status,setStatus]=useState(task.status);const [context,setContext]=useState(task.context);const [attachments,setAttachments]=useState(task.attachments||[]);const [confirming,setConfirming]=useState(false);
+  const [name,setName]=useState(task.name||'');
+  const [status,setStatus]=useState(task.status||'');
+  const [context,setContext]=useState(task.context||'');
+  const [attachments,setAttachments]=useState(task.attachments||[]);
+  const [tags,setTags]=useState(task.tags||[]);
+  const [tagInput,setTagInput]=useState('');
+  const [tagColor,setTagColor]=useState(TAG_COLORS[5]);
+  const [due,setDue]=useState(task.due||'');
+  const [start,setStart]=useState(task.start||'');
+  const [estimate,setEstimate]=useState(task.estimate||'');
+  const [confirming,setConfirming]=useState(false);
+  const addTag=()=>{if(!tagInput.trim())return;setTags(prev=>[...prev,{label:tagInput.trim(),color:tagColor}]);setTagInput('');};
+  const removeTag=i=>setTags(prev=>prev.filter((_,j)=>j!==i));
   if(confirming)return(<div className="overlay" onClick={e=>e.target===e.currentTarget&&setConfirming(false)}><div className="modal" style={{maxWidth:360}}><div className="modal-header"><div className="modal-title">Delete this task?</div><button className="modal-close" onClick={()=>setConfirming(false)}>✕</button></div><p style={{fontSize:'13px',color:'var(--text2)',lineHeight:1.6}}><strong style={{color:'var(--text)'}}>{task.name}</strong> will be permanently removed.</p><div className="modal-footer"><div/><div className="footer-right"><button className="btn" onClick={()=>setConfirming(false)}>Cancel</button><button className="btn danger" onClick={onDelete}>Delete</button></div></div></div></div>);
-  return(<div className="overlay" onClick={e=>e.target===e.currentTarget&&onClose()}><div className="modal"><div className="modal-header"><div className="modal-title">{name||'Untitled'}</div><button className="modal-close" onClick={onClose}>✕</button></div><div className="field"><label>Task Name</label><input className="m-input" value={name} onChange={e=>setName(e.target.value)} placeholder="What needs doing?"/></div><div className="field"><label>Status</label><input className="m-input" value={status} onChange={e=>setStatus(e.target.value)} placeholder="in progress, waiting on, blocked…"/></div><div className="field"><label>Context & Notes</label><textarea className="m-textarea" value={context} onChange={e=>setContext(e.target.value)} placeholder="Notes, links, context…"/></div><div className="divider"/><div className="field"><label>Attachments{attachments.length>0?' · '+attachments.length:''}</label><Attachments attachments={attachments} onChange={setAttachments}/></div><div className="modal-footer"><button className="trash-btn" onClick={()=>setConfirming(true)}>🗑 Delete</button><div className="footer-right"><button className="btn" onClick={onClose}>Cancel</button><button className="btn primary" onClick={()=>{onSave({...task,name,status,context,attachments});onClose();}}>Save</button></div></div></div></div>);
+  return(<div className="overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+    <div className="modal">
+      <div className="modal-header"><div className="modal-title">{name||'Untitled'}</div><button className="modal-close" onClick={onClose}>✕</button></div>
+      <div className="field"><label>Task Name</label><input className="m-input" value={name} onChange={e=>setName(e.target.value)} placeholder="What needs doing?"/></div>
+      <div className="field"><label>Status</label><input className="m-input" value={status} onChange={e=>setStatus(e.target.value)} placeholder="in progress, waiting on, blocked…"/></div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'10px'}}>
+        <div className="field"><label>Start</label><input className="m-input" value={start} onChange={e=>setStart(e.target.value)} placeholder="Mar 10"/></div>
+        <div className="field"><label>Due</label><input className="m-input" value={due} onChange={e=>setDue(e.target.value)} placeholder="Mar 15"/></div>
+        <div className="field"><label>Estimate</label><input className="m-input" value={estimate} onChange={e=>setEstimate(e.target.value)} placeholder="2h"/></div>
+      </div>
+      <div className="field">
+        <label>Tags</label>
+        <div style={{display:'flex',gap:'6px',alignItems:'center'}}>
+          <input className="m-input" style={{flex:1}} value={tagInput} onChange={e=>setTagInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addTag()} placeholder="Tag label…"/>
+          <button className="btn sm" onClick={addTag}>Add</button>
+        </div>
+        <div className="tag-swatches">
+          {TAG_COLORS.map(c=><div key={c} className={'tag-swatch'+(tagColor===c?' sel':'')} style={{background:c,borderColor:tagColor===c?'#333':c+'55'}} onClick={()=>setTagColor(c)} title={c}/>)}
+        </div>
+        {tags.length>0&&<div className="tag-chips-wrap">
+          {tags.map((t,i)=><span key={i} className="tag-chip" style={{background:t.color+'22',border:`1px solid ${t.color}`,color:t.color}}>
+            {t.label}<button className="tag-chip-x" onClick={()=>removeTag(i)}>✕</button>
+          </span>)}
+        </div>}
+      </div>
+      <div className="field"><label>Context & Notes</label><textarea className="m-textarea" value={context} onChange={e=>setContext(e.target.value)} placeholder="Notes, links, context…"/></div>
+      <div className="divider"/>
+      <div className="field"><label>Attachments{attachments.length>0?' · '+attachments.length:''}</label><Attachments attachments={attachments} onChange={setAttachments}/></div>
+      <div className="modal-footer">
+        <button className="trash-btn" onClick={()=>setConfirming(true)}>🗑 Delete</button>
+        <div className="footer-right"><button className="btn" onClick={onClose}>Cancel</button><button className="btn primary" onClick={()=>{onSave({...task,name,status,context,attachments,tags,due,start,estimate});onClose();}}>Save</button></div>
+      </div>
+    </div>
+  </div>);
 }
 
 /* DONE BADGES COMPONENT */
@@ -461,7 +564,15 @@ function TaskItem({task,onToggle,onOpen,onDragStart,onDragOver,onDrop,isDragging
   return(<div className={'task-item'+(isDragging?' dragging':'')+(isDragOver?' drag-over':'')+(completing?' completing':'')} draggable onDragStart={e=>onDragStart(e,task.id)} onDragOver={e=>{e.preventDefault();onDragOver(task.id);}} onDrop={e=>{e.preventDefault();onDrop(task.id);}}>
     <span className="drag-handle">⠿</span>
     <div className={'task-check'+(task.complete?' on':'')} onClick={handleToggle}/>
-    <div className="task-body"><div className="task-name">{task.name}</div>{task.status&&<div className="task-status">{task.status}</div>}</div>
+    <div className="task-body">
+      <div className="task-name-row"><div className="task-name">{task.name}</div>{task.estimate&&<span className="estimate-tag">{task.estimate}</span>}</div>
+      {task.status&&<div className="task-status">{task.status}</div>}
+      {((task.tags&&task.tags.length>0)||task.start||task.due)&&<div className="task-meta-row">
+        {(task.tags||[]).map((t,i)=><span key={i} className="tag-chip" style={{background:t.color+'22',border:`1px solid ${t.color}`,color:t.color,fontSize:'8px',padding:'1px 5px'}}>{t.label}</span>)}
+        {task.start&&<span className="task-date-label">Start: {task.start}</span>}
+        {task.due&&<span className="task-date-label">Due: {task.due}</span>}
+      </div>}
+    </div>
     <div className="task-meta">{(task.attachments||[]).length>0&&<span className="attach-badge">📎{task.attachments.length}</span>}<button className="open-btn" onClick={()=>onOpen(task)}>↗</button></div>
   </div>);
 }
@@ -516,6 +627,59 @@ function LookingForward({items,onDrop,onRemove,onOpen,onAdd}){
     </div>
     {items.length>0&&<div className="lf-list">{items.map(t=>(<div key={t.id} className="lf-item"><span className="lf-dot"/><span className="lf-name">{t.name}</span>{t.status&&<span style={{fontSize:'10px',color:'var(--purple)',fontStyle:'italic',flexShrink:0}}>{t.status}</span>}{(t.attachments||[]).length>0&&<span style={{fontSize:'10px',color:'var(--text3)',flexShrink:0}}>📎{t.attachments.length}</span>}<button className="open-btn" style={{flexShrink:0}} onClick={()=>onOpen(t)}>↗</button><button className="lf-remove" onClick={()=>onRemove(t.id)}>✕</button></div>))}</div>}
     <div className="lf-drop-hint">{items.length===0?'Drop tasks here to save for later':'Drop more tasks here'}</div>
+  </div>);
+}
+
+function NextWeek({items,onDrop,onRemove,onOpen,onAdd,onToggle,onUpdateItems}){
+  const [active,setActive]=useState(false);
+  const [newName,setNewName]=useState('');
+  const [dragOver,setDragOver]=useState(null);
+  const [draggingId,setDraggingId]=useState(null);
+  const hExternalDrop=e=>{
+    e.preventDefault();
+    const tid=e.dataTransfer.getData('taskId'),fd=e.dataTransfer.getData('fromDay');
+    if(tid&&fd)onDrop(fd,tid);
+    setActive(false);
+  };
+  const hItemDragStart=(e,id)=>{setDraggingId(id);e.dataTransfer.setData('nwId',id);};
+  const hItemDrop=(e,tid)=>{
+    e.preventDefault();e.stopPropagation();
+    if(!draggingId||draggingId===tid){setDraggingId(null);setDragOver(null);return;}
+    const fi=items.findIndex(t=>t.id===draggingId),ti=items.findIndex(t=>t.id===tid);
+    if(fi===-1||ti===-1)return;
+    const arr=[...items];const[m]=arr.splice(fi,1);arr.splice(ti,0,m);
+    onUpdateItems(arr);setDraggingId(null);setDragOver(null);
+  };
+  const add=()=>{if(!newName.trim())return;onAdd(newName.trim());setNewName('');};
+  return(<div className={'nw-block'+(active?' drop-active':'')}
+    onDragOver={e=>{e.preventDefault();if(e.dataTransfer.types.includes('fromday'))setActive(true);}}
+    onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget))setActive(false);}}
+    onDrop={hExternalDrop}>
+    <div className="nw-title">Next Week</div>
+    <div className="nw-sub">Tasks lined up for next week.</div>
+    <div className="nw-add-row">
+      <input className="nw-add-input" placeholder="Add a next-week task…" value={newName} onChange={e=>setNewName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&add()}/>
+      <button className="btn sm navy" onClick={add}>Add</button>
+    </div>
+    {items.length>0&&<div className="nw-list">{items.map(t=>(
+      <div key={t.id} className={'nw-item'+(draggingId===t.id?' dragging':'')+(dragOver===t.id?' drag-over':'')}
+        draggable
+        onDragStart={e=>hItemDragStart(e,t.id)}
+        onDragOver={e=>{e.preventDefault();e.stopPropagation();setDragOver(t.id);}}
+        onDragLeave={e=>e.stopPropagation()}
+        onDrop={e=>hItemDrop(e,t.id)}
+        onDragEnd={()=>{setDraggingId(null);setDragOver(null);}}>
+        <span className="drag-handle">⠿</span>
+        <div className={'task-check'+(t.complete?' on':'')} onClick={()=>onToggle(t.id)}/>
+        <span className="nw-dot"/>
+        <span className="nw-name" style={t.complete?{textDecoration:'line-through',opacity:.5}:{}}>{t.name}</span>
+        {t.status&&<span style={{fontSize:'10px',color:'#3d5af1',fontStyle:'italic',flexShrink:0,maxWidth:'80px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.status}</span>}
+        {(t.attachments||[]).length>0&&<span style={{fontSize:'10px',color:'var(--text3)',flexShrink:0}}>📎{t.attachments.length}</span>}
+        <button className="open-btn" style={{flexShrink:0}} onClick={()=>onOpen(t)}>↗</button>
+        <button className="nw-remove" onClick={()=>onRemove(t.id)}>✕</button>
+      </div>
+    ))}</div>}
+    <div className="nw-drop-hint">{items.length===0?'Drop tasks here for next week':'Drop more tasks here'}</div>
   </div>);
 }
 
@@ -709,9 +873,13 @@ function App(){
   const days=next8();
   const [tasks,setTasks]=useState({});
   const [forward,setForward]=useState([]);
+  const [nextWeek,_setNextWeek]=useState([]);
+  const nextWeekRef=useRef([]);
+  const setNextWeek=val=>{const nv=typeof val==='function'?val(nextWeekRef.current):val;nextWeekRef.current=nv;_setNextWeek(nv);};
   const [sel,setSel]=useState(0);
   const [editing,setEditing]=useState(null);
   const [editFwd,setEditFwd]=useState(null);
+  const [editNW,setEditNW]=useState(null);
   const [mobTab,setMobTab]=useState('today');
   const [syncStatus,setSyncStatus]=useState('loading');
   const saveTimer=useRef(null);
@@ -721,22 +889,29 @@ function App(){
   const [addMediaModal,setAddMediaModal]=useState(false);
   const [editMedia,setEditMedia]=useState(null);
 
-  useEffect(()=>{(async()=>{try{const[t,f]=await Promise.all([dbLoadTasks(),dbLoadForward()]);setTasks(t);setForward(f);setSyncStatus('ok');}catch(e){console.error(e);setSyncStatus('error');}})();},[]);
+  useEffect(()=>{(async()=>{try{const[t,f,nw]=await Promise.all([dbLoadTasks(),dbLoadForward(),dbLoadNextWeek()]);setTasks(t);setForward(f);setNextWeek(nw);setSyncStatus('ok');}catch(e){console.error(e);setSyncStatus('error');}})();},[]);
 
   const scheduleSave=(tasksObj,fwdArr)=>{
     if(saveTimer.current)clearTimeout(saveTimer.current);
     setSyncStatus('syncing');
-    saveTimer.current=setTimeout(async()=>{try{const ops=[];Object.entries(tasksObj).forEach(([dayKey,ts])=>{ts.forEach((t,i)=>ops.push(dbUpsertTask(t,dayKey,i)));});fwdArr.forEach((t,i)=>ops.push(dbUpsertForward(t,i)));await Promise.all(ops);setSyncStatus('ok');}catch(e){console.error(e);setSyncStatus('error');}},800);
+    saveTimer.current=setTimeout(async()=>{try{const ops=[];Object.entries(tasksObj).forEach(([dayKey,ts])=>{ts.forEach((t,i)=>ops.push(dbUpsertTask(t,dayKey,i)));});fwdArr.forEach((t,i)=>ops.push(dbUpsertForward(t,i)));nextWeekRef.current.forEach((t,i)=>ops.push(dbUpsertNextWeek(t,i)));await Promise.all(ops);setSyncStatus('ok');}catch(e){console.error(e);setSyncStatus('error');}},800);
   };
 
-  const addTask=(k,n)=>{const task={id:uid(),name:n,status:'',context:'',complete:false,attachments:[]};setTasks(prev=>{const next={...prev,[k]:[...(prev[k]||[]),task]};scheduleSave(next,forward);return next;});};
+  const addTask=(k,n)=>{const task={id:uid(),name:n,status:'',context:'',complete:false,attachments:[],tags:[],due:'',start:'',estimate:''};setTasks(prev=>{const next={...prev,[k]:[...(prev[k]||[]),task]};scheduleSave(next,forward);return next;});};
   const toggleTask=(k,id)=>setTasks(p=>{const next={...p,[k]:(p[k]||[]).map(t=>t.id===id?{...t,complete:!t.complete}:t)};scheduleSave(next,forward);return next;});
   const saveTask=(k,u)=>setTasks(p=>{const next={...p,[k]:(p[k]||[]).map(t=>t.id===u.id?u:t)};scheduleSave(next,forward);return next;});
   const updTasks=(k,a)=>setTasks(p=>{const next={...p,[k]:a};scheduleSave(next,forward);return next;});
   const delTask=(k,id)=>{dbDeleteTask(id);setTasks(p=>{const next={...p,[k]:(p[k]||[]).filter(t=>t.id!==id)};scheduleSave(next,forward);return next;});setEditing(null);};
   const movTask=(f,t,id)=>setTasks(p=>{const task=(p[f]||[]).find(x=>x.id===id);if(!task)return p;const next={...p,[f]:(p[f]||[]).filter(x=>x.id!==id),[t]:[...(p[t]||[]),task]};scheduleSave(next,forward);return next;});
   const moveToFwd=(fd,id)=>{const task=(tasks[fd]||[]).find(t=>t.id===id);if(!task)return;setTasks(prev=>{const next={...prev,[fd]:(prev[fd]||[]).filter(t=>t.id!==id)};const nf=[...forward,task];scheduleSave(next,nf);setForward(nf);return next;});};
-  const addFwd=n=>{const task={id:uid(),name:n,status:'',context:'',complete:false,attachments:[]};setForward(prev=>{const next=[...prev,task];scheduleSave(tasks,next);return next;});};
+  const addFwd=n=>{const task={id:uid(),name:n,status:'',context:'',complete:false,attachments:[],tags:[],due:'',start:'',estimate:''};setForward(prev=>{const next=[...prev,task];scheduleSave(tasks,next);return next;});};
+  const addNextWeek=n=>{const task={id:uid(),name:n,status:'',context:'',complete:false,attachments:[],tags:[],due:'',start:'',estimate:''};setNextWeek(prev=>{const next=[...prev,task];scheduleSave(tasks,forward);return next;});};
+  const toggleNextWeek=id=>setNextWeek(prev=>{const next=prev.map(t=>t.id===id?{...t,complete:!t.complete}:t);scheduleSave(tasks,forward);return next;});
+  const saveNWTask=u=>setNextWeek(prev=>{const next=prev.map(t=>t.id===u.id?u:t);scheduleSave(tasks,forward);return next;});
+  const updNextWeekItems=arr=>{setNextWeek(arr);scheduleSave(tasks,forward);};
+  const remNextWeek=id=>{dbDeleteNextWeek(id);setNextWeek(prev=>{const next=prev.filter(t=>t.id!==id);scheduleSave(tasks,forward);return next;});};
+  const delNWTask=id=>{dbDeleteNextWeek(id);setNextWeek(prev=>{const next=prev.filter(t=>t.id!==id);scheduleSave(tasks,forward);return next;});setEditNW(null);};
+  const moveToNextWeek=(fd,tid)=>{const task=(tasks[fd]||[]).find(t=>t.id===tid);if(!task)return;const newNW=[...nextWeekRef.current,task];setNextWeek(newNW);setTasks(prev=>{const next={...prev,[fd]:(prev[fd]||[]).filter(t=>t.id!==tid)};scheduleSave(next,forward);return next;});};
   const remFwd=id=>{dbDeleteForward(id);setForward(p=>{const next=p.filter(t=>t.id!==id);scheduleSave(tasks,next);return next;});};
   const saveFwd=u=>setForward(p=>{const next=p.map(t=>t.id===u.id?u:t);scheduleSave(tasks,next);return next;});
   const delFwd=id=>{dbDeleteForward(id);setForward(p=>{const next=p.filter(t=>t.id!==id);scheduleSave(tasks,next);return next;});setEditFwd(null);};
@@ -791,6 +966,7 @@ function App(){
       <SyncStatus status={syncStatus}/>
       <div className="sidebar-section">This Week</div>
       {sidebarDays}
+      {nextWeek.length>0&&<><div className="sidebar-section" style={{color:'#3d5af1'}}>Next Week</div><div className="s-day" style={{cursor:'default'}}><div className="s-day-count" style={{color:'#3d5af1',fontSize:'10px'}}>{nextWeek.length} task{nextWeek.length!==1?'s':''} queued</div></div></>}
       {forward.length>0&&<><div className="sidebar-section" style={{color:'var(--purple)'}}>Looking Forward</div><div className="s-day" style={{cursor:'default'}}><div className="s-day-count" style={{color:'var(--purple)',fontSize:'10px'}}>{forward.length} task{forward.length!==1?'s':''} parked</div></div></>}
       <div className="sidebar-section" style={{color:'var(--accent2)'}}>Reading</div>
       <div className={'s-reading-link'+(mobTab==='reading'?' active':'')} onClick={()=>{setMobTab('reading');setShowAllCompleted(false);}}>
@@ -803,6 +979,7 @@ function App(){
         <SyncStatus status={syncStatus}/>
         <DayBlock date={cur} tasks={ct} isToday={sel===0} onAdd={addTask} onToggle={toggleTask} onOpen={t=>setEditing({task:t,dayKey:ck})} onUpdateTasks={updTasks} onMoveTask={movTask}/>
         {weekStrip}
+        <NextWeek items={nextWeek} onDrop={moveToNextWeek} onRemove={remNextWeek} onOpen={t=>setEditNW(t)} onAdd={addNextWeek} onToggle={toggleNextWeek} onUpdateItems={updNextWeekItems}/>
         <LookingForward items={forward} onDrop={moveToFwd} onRemove={remFwd} onOpen={t=>setEditFwd(t)} onAdd={addFwd}/>
       </>}
       {mobTab==='days'&&<><div className="sidebar-section" style={{fontSize:'11px',paddingLeft:0}}>This Week</div><div style={{display:'flex',flexDirection:'column',gap:'8px'}}>{sidebarDays}</div></>}
@@ -822,6 +999,7 @@ function App(){
 
     {editing&&<TaskModal task={editing.task} onClose={()=>setEditing(null)} onSave={u=>{saveTask(editing.dayKey,u);setEditing(null);}} onDelete={()=>delTask(editing.dayKey,editing.task.id)}/>}
     {editFwd&&<TaskModal task={editFwd} onClose={()=>setEditFwd(null)} onSave={u=>{saveFwd(u);setEditFwd(null);}} onDelete={()=>delFwd(editFwd.id)}/>}
+    {editNW&&<TaskModal task={editNW} onClose={()=>setEditNW(null)} onSave={u=>{saveNWTask(u);setEditNW(null);}} onDelete={()=>delNWTask(editNW.id)}/>}
     {(addMediaModal||editMedia)&&<MediaEntryModal entry={editMedia||{}} onClose={()=>{setAddMediaModal(false);setEditMedia(null);}} onSave={item=>{editMedia?updateMedia(item):addMedia(item);setAddMediaModal(false);setEditMedia(null);}} onDelete={editMedia?()=>{removeMedia(editMedia.id);setEditMedia(null);}:undefined}/>}
   </div>);
 }
