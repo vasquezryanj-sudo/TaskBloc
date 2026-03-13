@@ -207,6 +207,11 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Nunito
 .sync-dot.err{background:#c0392b;}
 .sync-dot.syncing{background:var(--gold);animation:pulse 1s infinite;}
 @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+.sync-btn{background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:0 2px;line-height:1;opacity:.55;transition:opacity .15s;}
+.sync-btn:hover{opacity:1;}
+.sync-btn:disabled{cursor:default;opacity:.35;}
+.sync-btn.spinning{animation:spin .8s linear infinite;}
+@keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
 
 /* MOBILE */
 .mob-nav{display:none;}
@@ -686,7 +691,7 @@ function NextWeek({items,onDrop,onRemove,onOpen,onAdd,onToggle,onUpdateItems}){
   </div>);
 }
 
-function SyncStatus({status}){
+function SyncStatus({status,onSync}){
   const [online,setOnline]=React.useState(navigator.onLine);
   React.useEffect(()=>{
     const on=()=>setOnline(true);
@@ -698,7 +703,8 @@ function SyncStatus({status}){
   if(!online)return(<div className="sync-bar"><div className="sync-dot err"/><span>offline — changes will sync when reconnected</span></div>);
   const cls=status==='ok'?'ok':status==='error'?'err':status==='syncing'?'syncing':'';
   const label=status==='ok'?'synced':status==='error'?'sync error':status==='syncing'?'syncing…':'connecting…';
-  return(<div className="sync-bar"><div className={'sync-dot '+cls}/><span>{label}</span></div>);
+  const syncing=status==='syncing'||status==='loading';
+  return(<div className="sync-bar"><div className={'sync-dot '+cls}/><span>{label}</span>{onSync&&<button className={'sync-btn'+(syncing?' spinning':'')} disabled={syncing} onClick={onSync} title="Reload from server">↻</button>}</div>);
 }
 
 // ── MEDIA TRACKER ──
@@ -892,7 +898,8 @@ function App(){
   const [addMediaModal,setAddMediaModal]=useState(false);
   const [editMedia,setEditMedia]=useState(null);
 
-  useEffect(()=>{(async()=>{try{const[t,f,nw]=await Promise.all([dbLoadTasks(),dbLoadForward(),dbLoadNextWeek()]);setTasks(t);setForward(f);setNextWeek(nw);setSyncStatus('ok');}catch(e){console.error(e);setSyncStatus('error');}})();},[]);
+  const fullSync=async()=>{setSyncStatus('syncing');try{const[t,f,nw]=await Promise.all([dbLoadTasks(),dbLoadForward(),dbLoadNextWeek()]);setTasks(t);setForward(f);setNextWeek(nw);setSyncStatus('ok');}catch(e){console.error(e);setSyncStatus('error');}};
+  useEffect(()=>{fullSync();},[]);
 
   const scheduleSave=(tasksObj,fwdArr)=>{
     if(saveTimer.current)clearTimeout(saveTimer.current);
@@ -966,7 +973,7 @@ function App(){
     <div className="sidebar">
       <div className="sidebar-logo">TaskBloc</div>
       <div className="sidebar-sub">your days, organized</div>
-      <SyncStatus status={syncStatus}/>
+      <SyncStatus status={syncStatus} onSync={fullSync}/>
       <div className="sidebar-section">This Week</div>
       {sidebarDays}
       {nextWeek.length>0&&<><div className="sidebar-section" style={{color:'#3d5af1'}}>Next Week</div><div className="s-day" style={{cursor:'default'}}><div className="s-day-count" style={{color:'#3d5af1',fontSize:'10px'}}>{nextWeek.length} task{nextWeek.length!==1?'s':''} queued</div></div></>}
