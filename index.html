@@ -564,12 +564,12 @@ function TaskItem({task,onToggle,onOpen,onDragStart,onDragOver,onDrop,isDragging
   </div>);
 }
 
-function DayBlock({date,tasks,isToday,onAdd,onToggle,onOpen,onUpdateTasks,onMoveTask,onSendCal}){
+function DayBlock({date,tasks,isToday,onAdd,onToggle,onOpen,onUpdateTasks,onMoveTask,onMoveFromForward}){
   const [newName,setNewName]=useState('');const [dragOver,setDragOver]=useState(null);const [draggingId,setDraggingId]=useState(null);const [zoneActive,setZoneActive]=useState(false);const [calStatus,setCalStatus]=useState('idle');
   const key=dk(date);
   const hDragStart=(e,id)=>{setDraggingId(id);e.dataTransfer.setData('taskId',id);e.dataTransfer.setData('fromDay',key);};
   const hDrop=tid=>{if(!draggingId||draggingId===tid){setDraggingId(null);setDragOver(null);return;}const fi=tasks.findIndex(t=>t.id===draggingId),ti=tasks.findIndex(t=>t.id===tid);if(fi===-1||ti===-1)return;const arr=[...tasks];const[m]=arr.splice(fi,1);arr.splice(ti,0,m);onUpdateTasks(key,arr);setDraggingId(null);setDragOver(null);};
-  const hZoneDrop=e=>{e.preventDefault();const tid=e.dataTransfer.getData('taskId'),fd=e.dataTransfer.getData('fromDay');if(fd&&fd!==key)onMoveTask(fd,key,tid);setZoneActive(false);};
+  const hZoneDrop=e=>{e.preventDefault();const tid=e.dataTransfer.getData('taskId'),fd=e.dataTransfer.getData('fromDay');if(fd==='forward')onMoveFromForward(tid,key);else if(fd&&fd!==key)onMoveTask(fd,key,tid);setZoneActive(false);};
   const add=()=>{if(!newName.trim())return;onAdd(key,newName.trim());setNewName('');};
   const sendCal=async()=>{
     setCalStatus('sending');
@@ -600,7 +600,7 @@ function DayBlock({date,tasks,isToday,onAdd,onToggle,onOpen,onUpdateTasks,onMove
   );
 }
 
-function LookingForward({items,onDrop,onRemove,onOpen,onAdd}){
+function LookingForward({items,onDrop,onRemove,onOpen,onAdd,onToggle}){
   const [active,setActive]=useState(false);
   const [newName,setNewName]=useState('');
   const hDrop=e=>{e.preventDefault();const tid=e.dataTransfer.getData('taskId'),fd=e.dataTransfer.getData('fromDay');if(tid&&fd)onDrop(fd,tid);setActive(false);};
@@ -612,7 +612,7 @@ function LookingForward({items,onDrop,onRemove,onOpen,onAdd}){
       <input className="lf-add-input" placeholder="Add a future task…" value={newName} onChange={e=>setNewName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&add()}/>
       <button className="btn sm purple" onClick={add}>Add</button>
     </div>
-    {items.length>0&&<div className="lf-list">{items.map(t=>(<div key={t.id} className="lf-item" onClick={()=>onOpen(t)} style={{cursor:'pointer'}}><span className="lf-dot"/><span className="lf-name">{t.name}</span>{t.status&&<span style={{fontSize:'10px',color:'var(--purple)',fontStyle:'italic',flexShrink:0}}>{t.status}</span>}{(t.attachments||[]).length>0&&<span style={{fontSize:'10px',color:'var(--text3)',flexShrink:0}}>📎{t.attachments.length}</span>}<button className="lf-remove" onClick={e=>{e.stopPropagation();onRemove(t.id);}}>✕</button></div>))}</div>}
+    {items.length>0&&<div className="lf-list">{items.map(t=>(<div key={t.id} className="lf-item" draggable onDragStart={e=>{e.dataTransfer.setData('taskId',t.id);e.dataTransfer.setData('fromDay','forward');}} onClick={()=>onOpen(t)} style={{cursor:'pointer'}}><div className={'task-check'+(t.complete?' on':'')} onClick={e=>{e.stopPropagation();onToggle(t.id);}}/><span className="lf-name" style={t.complete?{textDecoration:'line-through',color:'var(--text3)'}:{}}>{t.name}</span>{t.status&&<span style={{fontSize:'10px',color:'var(--purple)',fontStyle:'italic',flexShrink:0}}>{t.status}</span>}{(t.attachments||[]).length>0&&<span style={{fontSize:'10px',color:'var(--text3)',flexShrink:0}}>📎{t.attachments.length}</span>}<button className="lf-remove" onClick={e=>{e.stopPropagation();onRemove(t.id);}}>✕</button></div>))}</div>}
     <div className="lf-drop-hint">{items.length===0?'Drop tasks here to save for later':'Drop more tasks here'}</div>
   </div>);
 }
@@ -841,6 +841,8 @@ function App(){
   const remFwd=id=>{dbDeleteForward(id);setForward(p=>{const next=p.filter(t=>t.id!==id);scheduleSave(tasks,next);return next;});};
   const saveFwd=u=>setForward(p=>{const next=p.map(t=>t.id===u.id?u:t);scheduleSave(tasks,next);return next;});
   const delFwd=id=>{dbDeleteForward(id);setForward(p=>{const next=p.filter(t=>t.id!==id);scheduleSave(tasks,next);return next;});setEditFwd(null);};
+  const toggleFwd=id=>setForward(p=>{const next=p.map(t=>t.id===id?{...t,complete:!t.complete}:t);scheduleSave(tasks,next);return next;});
+  const moveFwdToDay=(id,dayKey)=>{const task=forward.find(t=>t.id===id);if(!task)return;dbDeleteForward(id);setForward(prev=>{const next=prev.filter(t=>t.id!==id);setTasks(prevT=>{const nextT={...prevT,[dayKey]:[...(prevT[dayKey]||[]),task]};scheduleSave(nextT,next);return nextT;});return next;});};
 
   const addMedia=item=>{const next=[...mediaItems,item];setMediaItems(next);mediaSave(next);};
   const updateMedia=item=>{const next=mediaItems.map(m=>m.id===item.id?item:m);setMediaItems(next);mediaSave(next);};
@@ -869,7 +871,10 @@ function App(){
     <div className="strip-label">Coming Up</div>
     <div className="week-row">
       {/* Today card first so you can scroll back */}
-      <div className={'week-card'+(sel===0?' is-today':'')} onClick={()=>selectDay(0)}>
+      <div className={'week-card'+(sel===0?' is-today':'')} onClick={()=>selectDay(0)}
+        onDragOver={e=>{e.preventDefault();e.currentTarget.classList.add('drop-target');}}
+        onDragLeave={e=>e.currentTarget.classList.remove('drop-target')}
+        onDrop={e=>{e.preventDefault();e.currentTarget.classList.remove('drop-target');const tid=e.dataTransfer.getData('taskId'),fd=e.dataTransfer.getData('fromDay'),k0=dk(days[0]);if(fd==='forward')moveFwdToDay(tid,k0);else if(fd&&fd!==k0)movTask(fd,k0,tid);}}>
         <div className="week-card-header"><div><div className="week-day-name">Today</div><div className="week-day-month">{MS[days[0].getMonth()]}</div></div><div className="week-day-num">{days[0].getDate()}</div></div>
         {(tasks[dk(days[0])]||[]).filter(t=>!t.complete).length===0?<div className="week-empty">{(tasks[dk(days[0])]||[]).length>0?'all done':'clear'}</div>:(tasks[dk(days[0])]||[]).filter(t=>!t.complete).map(t=><div key={t.id} className="week-pill"><span className="week-pill-dot"/>{t.name}</div>)}
       </div>
@@ -877,7 +882,7 @@ function App(){
         <div key={k} className={'week-card'+(sel===i+1?' is-today':'')} onClick={()=>selectDay(i+1)}
           onDragOver={e=>{e.preventDefault();e.currentTarget.classList.add('drop-target');}}
           onDragLeave={e=>e.currentTarget.classList.remove('drop-target')}
-          onDrop={e=>{e.preventDefault();e.currentTarget.classList.remove('drop-target');const tid=e.dataTransfer.getData('taskId'),fd=e.dataTransfer.getData('fromDay');if(fd&&fd!==k)movTask(fd,k,tid);}}>
+          onDrop={e=>{e.preventDefault();e.currentTarget.classList.remove('drop-target');const tid=e.dataTransfer.getData('taskId'),fd=e.dataTransfer.getData('fromDay');if(fd==='forward')moveFwdToDay(tid,k);else if(fd&&fd!==k)movTask(fd,k,tid);}}>
           <div className="week-card-header"><div><div className="week-day-name">{DAYS[d.getDay()]}</div><div className="week-day-month">{MS[d.getMonth()]}</div></div><div className="week-day-num">{d.getDate()}</div></div>
           {dt.filter(t=>!t.complete).length===0?<div className="week-empty">{dt.length>0?'all done':'clear'}</div>:dt.filter(t=>!t.complete).map(t=><div key={t.id} className="week-pill"><span className="week-pill-dot"/>{t.name}</div>)}
         </div>
@@ -902,12 +907,12 @@ function App(){
     <div className="main" ref={mainRef}>
       {mobTab==='today'&&<>
         <SyncStatus status={syncStatus}/>
-        <DayBlock date={cur} tasks={ct} isToday={sel===0} onAdd={addTask} onToggle={toggleTask} onOpen={t=>setEditing({task:t,dayKey:ck})} onUpdateTasks={updTasks} onMoveTask={movTask}/>
+        <DayBlock date={cur} tasks={ct} isToday={sel===0} onAdd={addTask} onToggle={toggleTask} onOpen={t=>setEditing({task:t,dayKey:ck})} onUpdateTasks={updTasks} onMoveTask={movTask} onMoveFromForward={moveFwdToDay}/>
         {weekStrip}
-        <LookingForward items={forward} onDrop={moveToFwd} onRemove={remFwd} onOpen={t=>setEditFwd(t)} onAdd={addFwd}/>
+        <LookingForward items={forward} onDrop={moveToFwd} onRemove={remFwd} onOpen={t=>setEditFwd(t)} onAdd={addFwd} onToggle={toggleFwd}/>
       </>}
       {mobTab==='days'&&<><div className="sidebar-section" style={{fontSize:'11px',paddingLeft:0}}>This Week</div><div style={{display:'flex',flexDirection:'column',gap:'8px'}}>{sidebarDays}</div></>}
-      {mobTab==='forward'&&<LookingForward items={forward} onDrop={moveToFwd} onRemove={remFwd} onOpen={t=>setEditFwd(t)} onAdd={addFwd}/>}
+      {mobTab==='forward'&&<LookingForward items={forward} onDrop={moveToFwd} onRemove={remFwd} onOpen={t=>setEditFwd(t)} onAdd={addFwd} onToggle={toggleFwd}/>}
       {mobTab==='reading'&&(!showAllCompleted
         ?<MediaPage items={mediaItems} onAdd={()=>setAddMediaModal(true)} onEdit={setEditMedia} onRemove={removeMedia} onToggleComplete={toggleMediaComplete} onUpdateQuotes={updateMediaQuotes} onViewAll={()=>setShowAllCompleted(true)}/>
         :<AllCompletedPage items={mediaItems.filter(m=>m.status==='completed')} onBack={()=>setShowAllCompleted(false)}/>
