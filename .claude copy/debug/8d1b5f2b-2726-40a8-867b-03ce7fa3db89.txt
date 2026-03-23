@@ -1,7 +1,0 @@
-2026-03-07T15:24:35.779Z [DEBUG] [Query.streamInput] Starting to process input stream
-2026-03-07T15:24:35.781Z [DEBUG] [Query.streamInput] Processing message 1: user
-2026-03-07T15:25:13.308Z [DEBUG] [Query.streamInput] Finished processing 1 messages from input stream
-2026-03-07T15:25:13.308Z [DEBUG] [Query.streamInput] Has bidirectional needs, waiting for first result
-2026-03-07T15:25:13.349Z [DEBUG] [Query] Calling transport.endInput() to close stdin to CLI process
-2026-03-07T15:26:22.505Z [DEBUG] [Query.streamInput] Starting to process input stream
-2026-03-07T15:26:22.505Z [DEBUG] [Query.streamInput] Processing message 1: user

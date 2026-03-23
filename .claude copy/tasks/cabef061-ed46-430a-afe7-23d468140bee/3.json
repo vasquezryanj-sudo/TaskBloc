@@ -1,9 +1,0 @@
-{
-  "id": "3",
-  "subject": "Consolidate Completed Media section with View All",
-  "description": "Consolidate all completed items under a single 'Completed Media' heading showing 2 most recent of each type (up to 6 total). Add View All button that opens full directory with Books, Articles, Podcasts sections.",
-  "activeForm": "Building Completed Media section",
-  "status": "completed",
-  "blocks": [],
-  "blockedBy": []
-}

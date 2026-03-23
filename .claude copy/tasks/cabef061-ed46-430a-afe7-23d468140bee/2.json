@@ -1,9 +1,0 @@
-{
-  "id": "2",
-  "subject": "Add type emojis (📚 📰 🎙️) to media entries",
-  "description": "Add 📚 to book entries, 📰 to articles, and 🎙️ to podcasts everywhere they appear in the app.",
-  "activeForm": "Adding type emojis to media entries",
-  "status": "completed",
-  "blocks": [],
-  "blockedBy": []
-}

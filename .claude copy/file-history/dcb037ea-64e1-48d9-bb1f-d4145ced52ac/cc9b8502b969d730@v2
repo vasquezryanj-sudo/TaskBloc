@@ -1,2 +1,0 @@
--- Add nullable media_link column for article/podcast URLs
-ALTER TABLE books ADD COLUMN media_link TEXT;
