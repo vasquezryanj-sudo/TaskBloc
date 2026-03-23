@@ -1,0 +1,301 @@
+'use client'
+
+import { useState } from 'react'
+import { startOfWeek, addDays, addWeeks, format, isToday, isBefore, startOfDay } from 'date-fns'
+import {
+  DndContext,
+  DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
+  PointerSensor,
+  useDroppable,
+  useDraggable,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core'
+import type { Book, Session, PriorityItem } from '@/types'
+
+type SessionWithBook = Session & { book: Book }
+
+interface Props {
+  sessions: SessionWithBook[]
+  priorities: PriorityItem[]
+  weekOffset: number
+  onChangeWeek: (offset: number) => void
+  onSelectSession: (session: SessionWithBook) => void
+  onSelectPriority: (item: PriorityItem) => void
+  onSessionMoved: () => void
+}
+
+const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
+function sessionBorderColor(sortOrder: number | null) {
+  if (sortOrder === 1) return 'border-violet-400'
+  if (sortOrder === 2) return 'border-amber-400'
+  return 'border-blue-400'
+}
+
+function sessionBg(sortOrder: number | null, hover = false) {
+  if (sortOrder === 1) return hover ? 'hover:bg-violet-50' : 'bg-violet-50/60'
+  if (sortOrder === 2) return hover ? 'hover:bg-amber-50' : 'bg-amber-50/60'
+  return hover ? 'hover:bg-blue-50' : 'bg-stone-50'
+}
+
+function sessionTitleColor(sortOrder: number | null) {
+  if (sortOrder === 1) return 'text-violet-900 group-hover:text-violet-700'
+  if (sortOrder === 2) return 'text-amber-900 group-hover:text-amber-700'
+  return 'text-stone-700 group-hover:text-blue-700'
+}
+
+function sessionMetaColor(sortOrder: number | null) {
+  if (sortOrder === 1) return 'text-violet-400'
+  if (sortOrder === 2) return 'text-amber-400'
+  return 'text-stone-400'
+}
+
+// ── Draggable session card ──────────────────────────────────────────────────
+
+function DraggableSession({
+  session,
+  onClick,
+}: {
+  session: SessionWithBook
+  onClick: () => void
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: session.id })
+  const order = session.book.sort_order
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ opacity: isDragging ? 0.35 : 1 }}
+      className={`w-full text-left rounded-md border-l-[3px] px-2 py-1.5 text-xs shadow-sm transition-all group cursor-pointer
+        ${sessionBorderColor(order)} ${sessionBg(order)} ${sessionBg(order, true)}`}
+    >
+      {/* Drag handle — thin strip on left edge */}
+      <div
+        {...attributes}
+        {...listeners}
+        className="absolute left-0 top-0 bottom-0 w-3 cursor-grab active:cursor-grabbing touch-none"
+      />
+      <button className="w-full text-left" onClick={onClick}>
+        <p className={`font-semibold truncate leading-tight transition-colors ${sessionTitleColor(order)}`}>
+          {session.book.title}
+        </p>
+        <p className={`mt-0.5 ${sessionMetaColor(order)}`}>
+          pp.&nbsp;{session.pages_start}–{session.pages_end}
+        </p>
+      </button>
+    </div>
+  )
+}
+
+function SessionOverlay({ session }: { session: SessionWithBook }) {
+  const order = session.book.sort_order
+  return (
+    <div className={`rounded-md border-l-[3px] px-2 py-1.5 text-xs shadow-lg opacity-90 w-32
+      ${sessionBorderColor(order)} ${sessionBg(order)}`}>
+      <p className={`font-semibold truncate leading-tight ${sessionTitleColor(order)}`}>
+        {session.book.title}
+      </p>
+      <p className={`mt-0.5 ${sessionMetaColor(order)}`}>
+        pp.&nbsp;{session.pages_start}–{session.pages_end}
+      </p>
+    </div>
+  )
+}
+
+// ── Droppable day column ────────────────────────────────────────────────────
+
+function DroppableDay({
+  date,
+  children,
+  isCurrentDay,
+}: {
+  date: string
+  children: React.ReactNode
+  isCurrentDay: boolean
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: date })
+  return (
+    <div
+      ref={setNodeRef}
+      className={`p-1.5 space-y-1.5 min-h-28 flex-1 transition-colors rounded-b-md ${
+        isOver ? 'bg-blue-50/70 ring-1 ring-inset ring-blue-200' : ''
+      }`}
+    >
+      {children}
+    </div>
+  )
+}
+
+// ── Main calendar ───────────────────────────────────────────────────────────
+
+export default function WeeklyCalendar({
+  sessions,
+  priorities,
+  weekOffset,
+  onChangeWeek,
+  onSelectSession,
+  onSelectPriority,
+  onSessionMoved,
+}: Props) {
+  const [activeSession, setActiveSession] = useState<SessionWithBook | null>(null)
+  const [optimisticMoves, setOptimisticMoves] = useState<Record<string, string>>({})
+
+  const todayStart = startOfDay(new Date())
+  const weekStart = addWeeks(startOfWeek(new Date(), { weekStartsOn: 1 }), weekOffset)
+  const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
+  const weekLabel = `${format(days[0], 'MMM d')} – ${format(days[6], 'MMM d, yyyy')}`
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
+
+  // Apply optimistic moves so the UI updates before the network round-trip
+  const displaySessions = sessions.map(s =>
+    optimisticMoves[s.id] ? { ...s, scheduled_date: optimisticMoves[s.id] } : s
+  )
+
+  function handleDragStart(event: DragStartEvent) {
+    const s = sessions.find(s => s.id === event.active.id)
+    setActiveSession(s ?? null)
+  }
+
+  async function handleDragEnd(event: DragEndEvent) {
+    setActiveSession(null)
+    const { active, over } = event
+    if (!over) return
+
+    const sessionId = active.id as string
+    const newDate = over.id as string
+    const session = sessions.find(s => s.id === sessionId)
+    if (!session || session.scheduled_date === newDate) return
+
+    // Optimistic update
+    setOptimisticMoves(prev => ({ ...prev, [sessionId]: newDate }))
+
+    await fetch(`/api/sessions/${sessionId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scheduled_date: newDate }),
+    })
+
+    setOptimisticMoves(prev => {
+      const next = { ...prev }
+      delete next[sessionId]
+      return next
+    })
+    onSessionMoved()
+  }
+
+  return (
+    <DndContext
+      sensors={sensors}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+    >
+      {/* Week navigation */}
+      <div className="flex items-center justify-between mb-4">
+        <button
+          onClick={() => onChangeWeek(weekOffset - 1)}
+          className="text-sm text-stone-500 hover:text-stone-800 px-3 py-1.5 rounded-lg hover:bg-stone-100 transition-colors"
+        >
+          ← Prev
+        </button>
+        <span className="text-sm font-medium text-stone-600">{weekLabel}</span>
+        <button
+          onClick={() => onChangeWeek(weekOffset + 1)}
+          className="text-sm text-stone-500 hover:text-stone-800 px-3 py-1.5 rounded-lg hover:bg-stone-100 transition-colors"
+        >
+          Next →
+        </button>
+      </div>
+
+      {/* Calendar grid */}
+      <div className="overflow-x-auto">
+        <div className="grid grid-cols-7 min-w-[560px] rounded-xl border border-stone-200 overflow-hidden bg-stone-50">
+          {days.map((day, i) => {
+            const iso = format(day, 'yyyy-MM-dd')
+            const isCurrentDay = isToday(day)
+            const isPast = isBefore(day, todayStart)
+            const daySessions = displaySessions.filter(s => s.scheduled_date === iso)
+            const dayItems = priorities.filter(p => p.scheduled_date === iso)
+
+            const completedSessions = daySessions.filter(s => s.is_completed)
+            const upcomingSessions = daySessions.filter(s => !s.is_completed)
+
+            return (
+              <div
+                key={iso}
+                className={`flex flex-col relative ${i < 6 ? 'border-r border-stone-100' : ''} ${
+                  isCurrentDay ? 'bg-blue-50/50' : ''
+                }`}
+              >
+                {/* Day header */}
+                <div className={`px-2.5 pt-3 pb-2 border-b border-stone-100 ${
+                  isCurrentDay ? 'bg-blue-100/40' : ''
+                }`}>
+                  <p className={`text-[11px] font-bold tracking-wider uppercase ${
+                    isCurrentDay ? 'text-blue-500' : isPast ? 'text-stone-300' : 'text-stone-400'
+                  }`}>
+                    {DAYS[i]}
+                  </p>
+                  <p className={`text-2xl font-semibold leading-tight mt-0.5 ${
+                    isCurrentDay ? 'text-blue-600' : isPast ? 'text-stone-300' : 'text-stone-600'
+                  }`}>
+                    {format(day, 'd')}
+                  </p>
+                </div>
+
+                <DroppableDay date={iso} isCurrentDay={isCurrentDay}>
+                  {/* Completed sessions */}
+                  {completedSessions.map(session => (
+                    <button
+                      key={session.id}
+                      onClick={() => onSelectSession(session)}
+                      className="w-full text-left rounded-md border-l-[3px] border-stone-200 bg-stone-100 px-2 py-1.5 text-xs shadow-sm transition-all opacity-50"
+                    >
+                      <p className="font-semibold truncate leading-tight text-stone-400 line-through">
+                        {session.book.title}
+                      </p>
+                      <p className="mt-0.5 text-stone-300 flex items-center gap-1">
+                        <span>✓</span>
+                        <span>pp.&nbsp;{session.pages_start}–{session.actual_end_page ?? session.pages_end}</span>
+                      </p>
+                    </button>
+                  ))}
+
+                  {/* Upcoming sessions — draggable */}
+                  {upcomingSessions.map(session => (
+                    <DraggableSession
+                      key={session.id}
+                      session={session}
+                      onClick={() => onSelectSession(session)}
+                    />
+                  ))}
+
+                  {/* Priority items */}
+                  {dayItems.map(item => (
+                    <button
+                      key={item.id}
+                      onClick={() => onSelectPriority(item)}
+                      className="w-full text-left rounded-md border-l-[3px] border-orange-400 bg-stone-50 hover:bg-orange-50 px-2 py-1.5 text-xs shadow-sm hover:shadow transition-all group"
+                    >
+                      <p className="font-semibold text-stone-700 truncate group-hover:text-orange-700 transition-colors leading-tight">
+                        {item.title}
+                      </p>
+                      <p className="text-orange-500 mt-0.5">Priority item</p>
+                    </button>
+                  ))}
+                </DroppableDay>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      <DragOverlay>
+        {activeSession && <SessionOverlay session={activeSession} />}
+      </DragOverlay>
+    </DndContext>
+  )
+}

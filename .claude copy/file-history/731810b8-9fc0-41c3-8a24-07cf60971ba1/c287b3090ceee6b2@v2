@@ -1,0 +1,95 @@
+import { NextRequest } from 'next/server'
+import { format, parseISO, addDays } from 'date-fns'
+import { supabase } from '@/lib/supabase'
+import { buildSchedule, getNextReadingDates } from '@/lib/scheduling'
+import type { Book, Session } from '@/types'
+
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params
+  const { data, error } = await supabase.from('books').select('*').eq('id', id).single()
+  if (error) return Response.json({ error: error.message }, { status: 404 })
+  return Response.json(data)
+}
+
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params
+  const body = await req.json()
+
+  const { data: book, error } = await supabase
+    .from('books')
+    .update(body)
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) return Response.json({ error: error.message }, { status: 500 })
+
+  // When priority is toggled, rebuild this book's schedule from today
+  // and push any other-book sessions that land on the same claimed dates forward.
+  if ('is_priority' in body) {
+    // 1. Grab the dates the priority book is about to claim (before deleting)
+    const { data: oldSessions } = await supabase
+      .from('sessions')
+      .select('scheduled_date')
+      .eq('book_id', id)
+      .eq('is_completed', false)
+      .order('scheduled_date')
+
+    const originalDates = new Set((oldSessions ?? []).map(s => s.scheduled_date))
+
+    // 2. Delete and rebuild from today
+    await supabase.from('sessions').delete().eq('book_id', id).eq('is_completed', false)
+
+    const sessionRows = buildSchedule(book as Book, [], new Date())
+    if (sessionRows.length > 0) {
+      await supabase.from('sessions').insert(sessionRows)
+    }
+
+    if (body.is_priority) {
+      // 3. Find dates the priority book newly claimed that weren't its before
+      const newDates = sessionRows.map(s => s.scheduled_date)
+      const displacing = newDates.filter(d => !originalDates.has(d))
+
+      if (displacing.length > 0) {
+        // 4. Find other books' sessions sitting on those dates
+        const { data: displaced } = await supabase
+          .from('sessions')
+          .select('*, book:books(*)')
+          .neq('book_id', id)
+          .eq('is_completed', false)
+          .in('scheduled_date', displacing)
+
+        // 5. Push each displaced session to the next valid reading date for its book
+        for (const s of displaced ?? []) {
+          const otherBook = (s as Session & { book: Book }).book!
+          const nextDate = getNextReadingDates(
+            addDays(parseISO(s.scheduled_date), 1),
+            1,
+            otherBook.sessions_per_week
+          )[0]
+          await supabase
+            .from('sessions')
+            .update({ scheduled_date: format(nextDate, 'yyyy-MM-dd') })
+            .eq('id', s.id)
+        }
+      }
+    }
+  }
+
+  return Response.json(book)
+}
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params
+  const { error } = await supabase.from('books').delete().eq('id', id)
+  if (error) return Response.json({ error: error.message }, { status: 500 })
+  return new Response(null, { status: 204 })
+}

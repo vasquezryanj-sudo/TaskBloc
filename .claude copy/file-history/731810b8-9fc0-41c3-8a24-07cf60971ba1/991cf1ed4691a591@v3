@@ -1,0 +1,309 @@
+'use client'
+
+import { useState, useEffect, useCallback } from 'react'
+import Link from 'next/link'
+import { format, isToday, isTomorrow, parseISO } from 'date-fns'
+import { supabase } from '@/lib/supabase'
+import AddBookModal from '@/components/AddBookModal'
+import SessionCard from '@/components/SessionCard'
+import PriorityCard from '@/components/PriorityCard'
+import CompleteSessionModal from '@/components/CompleteSessionModal'
+import EditSessionModal from '@/components/EditSessionModal'
+import type { Book, Session, PriorityItem } from '@/types'
+
+type SessionWithBook = Session & { book: Book }
+
+type TimelineEntry =
+  | { type: 'session'; date: string; item: SessionWithBook }
+  | { type: 'priority'; date: string; item: PriorityItem }
+
+function formatDateLabel(dateStr: string) {
+  const d = parseISO(dateStr)
+  if (isToday(d)) return `Today · ${format(d, 'EEE, MMM d')}`
+  if (isTomorrow(d)) return `Tomorrow · ${format(d, 'EEE, MMM d')}`
+  return format(d, 'EEE, MMM d')
+}
+
+function FlagIcon({ active }: { active: boolean }) {
+  return (
+    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden>
+      {/* pole */}
+      <line x1="3" y1="1.5" x2="3" y2="13.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      {/* pennant */}
+      <path
+        d="M3 2L12 5L3 8Z"
+        fill={active ? 'currentColor' : 'none'}
+        stroke="currentColor"
+        strokeWidth="1.25"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+export default function Dashboard() {
+  const [books, setBooks] = useState<Book[]>([])
+  const [sessions, setSessions] = useState<SessionWithBook[]>([])
+  const [priorities, setPriorities] = useState<PriorityItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [flagging, setFlagging] = useState<Set<string>>(new Set())
+
+  const [showAddBook, setShowAddBook] = useState(false)
+  const [completeTarget, setCompleteTarget] = useState<SessionWithBook | null>(null)
+  const [editTarget, setEditTarget] = useState<SessionWithBook | null>(null)
+
+  const refresh = useCallback(async () => {
+    const today = new Date().toISOString().split('T')[0]
+    const [booksRes, sessionsRes, prioritiesRes] = await Promise.all([
+      supabase
+        .from('books')
+        .select('*')
+        .eq('status', 'active')
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('sessions')
+        .select('*, book:books(*)')
+        .gte('scheduled_date', today)
+        .eq('is_completed', false)
+        .order('scheduled_date')
+        .limit(50),
+      supabase
+        .from('priority_items')
+        .select('*')
+        .gte('scheduled_date', today)
+        .eq('is_completed', false)
+        .order('scheduled_date'),
+    ])
+    setBooks((booksRes.data as Book[]) ?? [])
+    setSessions((sessionsRes.data as SessionWithBook[]) ?? [])
+    setPriorities((prioritiesRes.data as PriorityItem[]) ?? [])
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { refresh() }, [refresh])
+
+  // Build date-keyed timeline
+  const timeline = new Map<string, TimelineEntry[]>()
+  for (const s of sessions) {
+    const entries = timeline.get(s.scheduled_date) ?? []
+    entries.push({ type: 'session', date: s.scheduled_date, item: s })
+    timeline.set(s.scheduled_date, entries)
+  }
+  for (const p of priorities) {
+    const entries = timeline.get(p.scheduled_date) ?? []
+    entries.push({ type: 'priority', date: p.scheduled_date, item: p })
+    timeline.set(p.scheduled_date, entries)
+  }
+  const sortedDates = Array.from(timeline.keys()).sort()
+
+  async function handleExportICS() {
+    const res = await fetch('/api/export/ics')
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'reading-schedule.ics'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  async function handleCompletePriority(id: string) {
+    await supabase.from('priority_items').update({ is_completed: true }).eq('id', id)
+    await refresh()
+  }
+
+  async function handleDeletePriority(id: string) {
+    await fetch(`/api/priority-items/${id}`, { method: 'DELETE' })
+    await refresh()
+  }
+
+  async function handleTogglePriority(book: Book) {
+    setFlagging(prev => new Set(prev).add(book.id))
+    await fetch(`/api/books/${book.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_priority: !book.is_priority }),
+    })
+    await refresh()
+    setFlagging(prev => { const next = new Set(prev); next.delete(book.id); return next })
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-slate-400 text-sm">
+        Loading…
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50">
+      {/* Header */}
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
+        <div className="max-w-3xl mx-auto px-6 py-4 flex items-center justify-between">
+          <h1 className="text-lg font-semibold text-slate-900 tracking-tight">Reading Tracker</h1>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleExportICS}
+              className="text-sm text-slate-500 hover:text-slate-800 border border-slate-200 px-3 py-1.5 rounded-lg hover:bg-slate-50 transition-colors"
+            >
+              ↓ Export ICS
+            </button>
+            <button
+              onClick={() => setShowAddBook(true)}
+              className="text-sm text-white bg-blue-500 hover:bg-blue-600 px-3 py-1.5 rounded-lg transition-colors font-medium"
+            >
+              + Book
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-3xl mx-auto px-6 py-8 space-y-10">
+
+        {/* Schedule */}
+        <section>
+          <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-4">
+            Upcoming Schedule
+          </h2>
+
+          {sortedDates.length === 0 ? (
+            <div className="text-center py-16 text-slate-400">
+              <p className="text-4xl mb-3">📚</p>
+              <p className="text-sm">No sessions scheduled.</p>
+              <p className="text-sm mt-1">Add a book to get started.</p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {sortedDates.map(date => (
+                <div key={date}>
+                  <p className="text-sm font-semibold text-slate-500 mb-2">
+                    {formatDateLabel(date)}
+                  </p>
+                  <div className="space-y-2">
+                    {timeline.get(date)!.map(entry =>
+                      entry.type === 'session' ? (
+                        <SessionCard
+                          key={entry.item.id}
+                          session={entry.item}
+                          onComplete={() => setCompleteTarget(entry.item)}
+                          onEdit={() => setEditTarget(entry.item)}
+                        />
+                      ) : (
+                        <PriorityCard
+                          key={entry.item.id}
+                          item={entry.item}
+                          onComplete={() => handleCompletePriority(entry.item.id)}
+                          onDelete={() => handleDeletePriority(entry.item.id)}
+                        />
+                      )
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Books summary */}
+        {books.length > 0 && (
+          <section>
+            <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-4">
+              Books
+            </h2>
+            <div className="space-y-2">
+              {books.map(book => {
+                const bookSessions = sessions.filter(s => s.book_id === book.id)
+                const lastSession = [...bookSessions].sort((a, b) =>
+                  b.scheduled_date.localeCompare(a.scheduled_date)
+                )[0]
+                const pct = book.total_pages > 0
+                  ? Math.round((book.current_page / book.total_pages) * 100)
+                  : 0
+                const isFlagging = flagging.has(book.id)
+
+                return (
+                  <div
+                    key={book.id}
+                    className={`bg-white rounded-lg border px-4 py-3 flex items-center justify-between gap-4 transition-colors ${
+                      book.is_priority
+                        ? 'border-red-200 bg-red-50/40'
+                        : 'border-slate-200'
+                    }`}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-slate-900 truncate">{book.title}</p>
+                        {book.is_priority && (
+                          <span className="text-xs font-semibold text-red-500 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded shrink-0">
+                            Priority
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <div className="flex-1 bg-slate-100 rounded-full h-1.5 max-w-48">
+                          <div
+                            className="bg-blue-500 h-1.5 rounded-full transition-all"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        <p className="text-xs text-slate-400 shrink-0">
+                          p. {book.current_page}/{book.total_pages}
+                          {lastSession && (
+                            <> · Finish ~{format(parseISO(lastSession.scheduled_date), 'MMM d')}</>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 shrink-0">
+                      {/* Flag toggle */}
+                      <button
+                        onClick={() => handleTogglePriority(book)}
+                        disabled={isFlagging}
+                        title={book.is_priority ? 'Remove priority' : 'Mark as priority'}
+                        className={`transition-colors disabled:opacity-40 ${
+                          book.is_priority
+                            ? 'text-red-500 hover:text-red-700'
+                            : 'text-slate-300 hover:text-slate-500'
+                        }`}
+                      >
+                        <FlagIcon active={book.is_priority} />
+                      </button>
+
+                      <Link
+                        href={`/books/${book.id}`}
+                        className="text-sm text-blue-500 hover:text-blue-700"
+                      >
+                        Notes →
+                      </Link>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+        )}
+      </main>
+
+      {/* Modals */}
+      {showAddBook && (
+        <AddBookModal onClose={() => setShowAddBook(false)} onSuccess={refresh} />
+      )}
+      {completeTarget && (
+        <CompleteSessionModal
+          session={completeTarget}
+          onClose={() => setCompleteTarget(null)}
+          onSuccess={refresh}
+        />
+      )}
+      {editTarget && (
+        <EditSessionModal
+          session={editTarget}
+          onClose={() => setEditTarget(null)}
+          onSuccess={refresh}
+        />
+      )}
+    </div>
+  )
+}

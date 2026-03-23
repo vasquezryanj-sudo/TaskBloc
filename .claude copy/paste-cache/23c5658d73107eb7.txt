@@ -1,0 +1,31 @@
+Create a pricing page at app/pricing/page.tsx. This page should be accessible to logged-in users and shown automatically when they hit the free tier limit. Match the MindWell aesthetic exactly.
+Three tiers displayed as cards side by side (or stacked on mobile):
+MindWell Basic (free)
+
+Up to 3 active works
+Outline, Brainstorm, and Quotes tabs
+PDF export per item
+Sign in with Google
+
+MindWell Pro ($4/month)
+
+Unlimited active works
+Everything in Basic
+Full tag search across all works
+Cross-book PDF export
+Priority support
+Subscribe button → calls POST /api/stripe/checkout with monthly price ID
+
+MindWell Pro Annual ($40/year)
+
+Everything in Pro
+Save 17% vs monthly
+Subscribe button → calls POST /api/stripe/checkout with annual price ID
+
+Design details:
+
+Light blue-gray background, midnight blue and amber accents
+Pro card should be visually emphasized — slightly larger, amber border or highlight, a small 'Most Popular' badge
+Logged-in users who are already Pro should see a 'Manage Subscription' button instead that calls GET /api/stripe/portal
+Add a small 'Back to app' link at the top
+Write in two parts if any file exceeds 150 lines — write lines 1-150, stop, wait for confirmation. Push when done

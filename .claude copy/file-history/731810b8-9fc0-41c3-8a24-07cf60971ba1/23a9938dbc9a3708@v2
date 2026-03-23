@@ -1,0 +1,25 @@
+import { supabase } from '@/lib/supabase'
+import { generateICS } from '@/lib/export'
+import type { Session, Book } from '@/types'
+
+export async function GET() {
+  const today = new Date().toISOString().split('T')[0]
+
+  const { data, error } = await supabase
+    .from('sessions')
+    .select('*, book:books(*)')
+    .gte('scheduled_date', today)
+    .eq('is_completed', false)
+    .order('scheduled_date', { ascending: true })
+
+  if (error) return Response.json({ error: error.message }, { status: 500 })
+
+  const ics = generateICS((data ?? []) as (Session & { book: Book })[])
+
+  return new Response(ics, {
+    headers: {
+      'Content-Type': 'text/calendar; charset=utf-8',
+      'Content-Disposition': 'attachment; filename="reading-schedule.ics"',
+    },
+  })
+}

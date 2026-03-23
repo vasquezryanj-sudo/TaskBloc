@@ -1,0 +1,10 @@
+Here's the full prompt to paste into Claude Code:
+
+Several updates:
+Completed sessions: When a session is marked complete, keep it visible on the calendar but display it in bold with a strikethrough or checkmark so the user can see their progress history.
+Books order and priority: Remove the priority flag entirely. Priority is determined by the order books appear on the home screen — make books drag and drop to reorder. The app schedules two books at once. The first book is labeled "Primary" with a lavender border, the second is labeled "Secondary" with a yellow border. Only one Primary and one Secondary at a time. Primary gets roughly 2/3 of reading pages per week, Secondary gets 1/3.
+Book completion flow: When a book is marked complete, move it under a "Complete" heading below the active books. The Secondary book automatically promotes to Primary, and the next book in the list becomes Secondary.
+Complete section: Show completed books in list view, each clickable to expand a panel showing date started, date finished, and a button to revisit the notes/outline/scratch pages.
+Articles: Add an "Add Article" button alongside "Add Book." Articles don't get scheduled on the calendar but appear under their own "Articles" heading with a green border. Each article has its own Outline, Scratch, and Quotes tabs.
+Outline tab: The outline text field should enforce outline formatting (I., A., 1., a., i.) as the user types.
+Quotes tab: Quotes should be organized under customizable headings that the user can create and name. Quotes can be dragged and dropped between headings. The tab should show headings with their quotes beneath, and a field to add a new quote with page number.

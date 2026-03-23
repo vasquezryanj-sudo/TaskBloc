@@ -1,0 +1,513 @@
+'use client'
+
+import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from 'react'
+import type { Quote } from '@/types'
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+export interface EditorHandle {
+  getCursorOffset(): number
+}
+
+interface Props {
+  value: string
+  onChange: (value: string) => void
+  className?: string
+  quotes?: Quote[]
+}
+
+interface PopoverState {
+  quoteId: string
+  chipOffset: number
+  x: number
+  y: number
+  confirming: boolean
+}
+
+// ── Chip styles (inline to avoid Tailwind purge) ──────────────────────────────
+
+const CHIP_STYLE = [
+  'display:inline-flex',
+  'align-items:center',
+  'justify-content:center',
+  'min-width:18px',
+  'height:18px',
+  'padding:0 5px',
+  'border-radius:6px',
+  'background:#fef3c7',
+  'color:#92400e',
+  'border:1px solid #fcd34d',
+  'font-size:9px',
+  'font-weight:700',
+  'cursor:pointer',
+  'user-select:none',
+  'margin:0 2px',
+  'vertical-align:middle',
+  'flex-shrink:0',
+  'line-height:1',
+].join(';')
+
+// ── Serialization ─────────────────────────────────────────────────────────────
+
+const QUOTE_RE = /\[quote:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\]/g
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+/**
+ * Convert a [quote:id] serialized string to contenteditable innerHTML.
+ * Newlines → <br>; [quote:uuid] tokens → non-editable Q chip spans.
+ */
+function toHtml(text: string): string {
+  const parts = text.split(QUOTE_RE)
+  let html = ''
+  for (let i = 0; i < parts.length; i++) {
+    if (i % 2 === 0) {
+      html += escapeHtml(parts[i]).replace(/\n/g, '<br>')
+    } else {
+      html += `<span style="${CHIP_STYLE}" contenteditable="false" draggable="true" data-quote-id="${parts[i]}">\u201cQ</span>`
+    }
+  }
+  return html
+}
+
+/**
+ * Walk the contenteditable DOM and return the [quote:id] serialized string.
+ * <br> → '\n'; chip spans → [quote:id]; browser-inserted DIVs → '\n' prefix.
+ */
+function toText(root: Node): string {
+  let text = ''
+  for (const node of root.childNodes) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      text += node.textContent ?? ''
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      const el = node as HTMLElement
+      if (el.dataset.quoteId) {
+        text += `[quote:${el.dataset.quoteId}]`
+      } else if (el.tagName === 'BR') {
+        text += '\n'
+      } else if (el.tagName === 'DIV' || el.tagName === 'P') {
+        if (node.previousSibling) text += '\n'
+        text += toText(el)
+      } else {
+        text += toText(el)
+      }
+    }
+  }
+  return text
+}
+
+// ── Cursor offset helpers ─────────────────────────────────────────────────────
+
+/** Serialized character length of a single DOM node. */
+function nodeLen(node: Node): number {
+  if (node.nodeType === Node.TEXT_NODE) return node.textContent?.length ?? 0
+  const el = node as HTMLElement
+  if (el.dataset?.quoteId) return `[quote:${el.dataset.quoteId}]`.length
+  if (el.tagName === 'BR') return 1
+  let n = 0
+  for (const child of el.childNodes) n += nodeLen(child)
+  return n
+}
+
+/** Compute the serialized character offset for a given DOM Range. */
+function getOffsetFromRange(div: HTMLElement, range: Range): number {
+  if (range.startContainer === div) {
+    let off = 0
+    for (let i = 0; i < range.startOffset; i++) off += nodeLen(div.childNodes[i])
+    return off
+  }
+
+  let offset = 0
+  let found = false
+
+  function walk(node: Node): void {
+    if (found) return
+    if (node === range.startContainer) {
+      offset += range.startOffset
+      found = true
+      return
+    }
+    if (node.nodeType === Node.TEXT_NODE) {
+      offset += node.textContent?.length ?? 0
+    } else {
+      const el = node as HTMLElement
+      if (el.dataset?.quoteId) {
+        offset += `[quote:${el.dataset.quoteId}]`.length
+      } else if (el.tagName === 'BR') {
+        offset += 1
+      } else {
+        for (const child of el.childNodes) {
+          walk(child)
+          if (found) return
+        }
+      }
+    }
+  }
+
+  for (const child of div.childNodes) {
+    walk(child)
+    if (found) break
+  }
+  return offset
+}
+
+/**
+ * Return the cursor's position as an offset in the serialized (text) string.
+ * Quote chips count as their full [quote:uuid] token length.
+ */
+function getOffset(div: HTMLElement): number {
+  const sel = window.getSelection()
+  if (!sel || sel.rangeCount === 0) return 0
+  return getOffsetFromRange(div, sel.getRangeAt(0))
+}
+
+/** Return the serialized character offset marking the start of a given child node. */
+function getNodeOffset(div: HTMLElement, targetNode: Node): number {
+  let offset = 0
+  let found = false
+
+  function walk(node: Node): void {
+    if (found) return
+    if (node === targetNode) { found = true; return }
+    if (node.nodeType === Node.TEXT_NODE) {
+      offset += node.textContent?.length ?? 0
+    } else {
+      const el = node as HTMLElement
+      if (el.dataset?.quoteId) {
+        offset += `[quote:${el.dataset.quoteId}]`.length
+      } else if (el.tagName === 'BR') {
+        offset += 1
+      } else {
+        for (const child of el.childNodes) {
+          walk(child)
+          if (found) return
+        }
+      }
+    }
+  }
+
+  for (const child of div.childNodes) {
+    walk(child)
+    if (found) break
+  }
+  return offset
+}
+
+/**
+ * Place the cursor at the given offset in the serialized string space.
+ */
+function setOffset(div: HTMLElement, target: number): void {
+  let remaining = target
+  let placed = false
+
+  function placeCursor(node: Node, off: number): void {
+    const range = document.createRange()
+    range.setStart(node, off)
+    range.collapse(true)
+    window.getSelection()?.removeAllRanges()
+    window.getSelection()?.addRange(range)
+    placed = true
+  }
+
+  function walk(node: Node): void {
+    if (placed) return
+    if (node.nodeType === Node.TEXT_NODE) {
+      const len = node.textContent?.length ?? 0
+      if (remaining <= len) { placeCursor(node, remaining); return }
+      remaining -= len
+    } else {
+      const el = node as HTMLElement
+      if (el.dataset?.quoteId) {
+        const len = `[quote:${el.dataset.quoteId}]`.length
+        if (remaining < len) {
+          const siblings = Array.from(el.parentNode!.childNodes)
+          placeCursor(el.parentNode!, siblings.indexOf(el as ChildNode) + 1)
+          return
+        }
+        remaining -= len
+      } else if (el.tagName === 'BR') {
+        if (remaining === 0) {
+          placeCursor(div, Array.from(div.childNodes).indexOf(el as ChildNode))
+          return
+        }
+        remaining -= 1
+      } else {
+        for (const child of el.childNodes) {
+          walk(child)
+          if (placed) return
+        }
+      }
+    }
+  }
+
+  for (const child of div.childNodes) {
+    walk(child)
+    if (placed) break
+  }
+
+  if (!placed) {
+    const range = document.createRange()
+    range.selectNodeContents(div)
+    range.collapse(false)
+    window.getSelection()?.removeAllRanges()
+    window.getSelection()?.addRange(range)
+  }
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
+const BrainstormEditor = forwardRef<EditorHandle, Props>(function BrainstormEditor(
+  { value, onChange, className, quotes = [] }: Props,
+  ref,
+) {
+  const divRef = useRef<HTMLDivElement>(null)
+
+  useImperativeHandle(ref, () => ({
+    getCursorOffset: () => divRef.current ? getOffset(divRef.current) : 0,
+  }))
+  const popoverRef = useRef<HTMLDivElement>(null)
+  const [popover, setPopover] = useState<PopoverState | null>(null)
+
+  // Sync external value changes → innerHTML only when the content actually differs
+  useEffect(() => {
+    const div = divRef.current
+    if (!div) return
+    if (toText(div) === value) return
+    div.innerHTML = toHtml(value)
+  }, [value])
+
+  // Close popover on outside click
+  useEffect(() => {
+    if (!popover) return
+    function onDown(e: MouseEvent) {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+        setPopover(null)
+      }
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [popover])
+
+  // Serialize DOM → string on every browser-driven mutation
+  function handleInput() {
+    const div = divRef.current
+    if (!div) return
+    onChange(toText(div))
+  }
+
+  // Intercept paste — insert as plain text only
+  function handlePaste(e: React.ClipboardEvent<HTMLDivElement>) {
+    e.preventDefault()
+    const text = e.clipboardData.getData('text/plain')
+    document.execCommand('insertText', false, text)
+  }
+
+  // Chip click → popover; other clicks → close popover
+  function handleClick(e: React.MouseEvent<HTMLDivElement>) {
+    const target = e.target as HTMLElement
+    if (target.dataset.quoteId) {
+      e.preventDefault()
+      const rect = target.getBoundingClientRect()
+      const chipOffset = divRef.current ? getNodeOffset(divRef.current, target) : 0
+      setPopover({ quoteId: target.dataset.quoteId, chipOffset, x: rect.left, y: rect.bottom + 6, confirming: false })
+    } else {
+      setPopover(null)
+    }
+  }
+
+  // Drag Q chip to reorder
+  function handleDragStart(e: React.DragEvent<HTMLDivElement>) {
+    const target = e.target as HTMLElement
+    if (target.dataset?.quoteId) {
+      e.dataTransfer.setData('text/x-quote-id', target.dataset.quoteId)
+      e.dataTransfer.effectAllowed = 'move'
+    }
+  }
+
+  function handleDragOver(e: React.DragEvent<HTMLDivElement>) {
+    if (e.dataTransfer.types.includes('text/x-quote-id')) {
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'move'
+    }
+  }
+
+  function handleDrop(e: React.DragEvent<HTMLDivElement>) {
+    const quoteId = e.dataTransfer.getData('text/x-quote-id')
+    if (!quoteId || !divRef.current) return
+    e.preventDefault()
+    const div = divRef.current
+    const text = toText(div)
+    const token = `[quote:${quoteId}]`
+    const originalPos = text.indexOf(token)
+    if (originalPos === -1) return
+
+    // Resolve drop caret position from mouse coordinates
+    let dropRange: Range | null = null
+    if (typeof document.caretRangeFromPoint === 'function') {
+      dropRange = document.caretRangeFromPoint(e.clientX, e.clientY)
+    } else {
+      type CaretPos = { offsetNode: Node; offset: number }
+      const pos = (document as unknown as { caretPositionFromPoint?: (x: number, y: number) => CaretPos | null })
+        .caretPositionFromPoint?.(e.clientX, e.clientY) ?? null
+      if (pos) {
+        dropRange = document.createRange()
+        dropRange.setStart(pos.offsetNode, pos.offset)
+      }
+    }
+    if (!dropRange) return
+
+    let dropOffset = getOffsetFromRange(div, dropRange)
+    // Remove chip from serialized text, then adjust drop offset
+    const textWithout = text.slice(0, originalPos) + text.slice(originalPos + token.length)
+    if (dropOffset > originalPos) {
+      dropOffset = Math.max(originalPos, dropOffset - token.length)
+    }
+    dropOffset = Math.max(0, Math.min(dropOffset, textWithout.length))
+    const newText = textWithout.slice(0, dropOffset) + token + textWithout.slice(dropOffset)
+    div.innerHTML = toHtml(newText)
+    onChange(newText)
+    setOffset(div, dropOffset + token.length)
+  }
+
+  // Remove only the specific chip that was clicked (matched by offset, falling back to first occurrence)
+  function handleDeleteChip(quoteId: string, chipOffset: number) {
+    const div = divRef.current
+    if (!div) return
+    const text = toText(div)
+    const token = `[quote:${quoteId}]`
+    const pos = text.slice(chipOffset, chipOffset + token.length) === token
+      ? chipOffset
+      : text.indexOf(token)
+    if (pos === -1) { setPopover(null); return }
+    const newText = text.slice(0, pos) + text.slice(pos + token.length)
+    div.innerHTML = toHtml(newText)
+    onChange(newText)
+    setPopover(null)
+  }
+
+  // Enter inserts a literal newline (prevents browser from wrapping in <div>).
+  // Tab inserts a literal tab character for indentation.
+  function handleKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    const div = divRef.current
+    if (!div) return
+
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      const text = toText(div)
+      const pos = getOffset(div)
+      const newText = text.slice(0, pos) + '\n' + text.slice(pos)
+      div.innerHTML = toHtml(newText)
+      onChange(newText)
+      setOffset(div, pos + 1)
+      return
+    }
+
+    if (e.key === 'Tab') {
+      e.preventDefault()
+      const text = toText(div)
+      const pos = getOffset(div)
+      const newText = text.slice(0, pos) + '\t' + text.slice(pos)
+      div.innerHTML = toHtml(newText)
+      onChange(newText)
+      setOffset(div, pos + 1)
+    }
+  }
+
+  const activeQuote = popover ? (quotes.find(q => q.id === popover.quoteId) ?? null) : null
+
+  return (
+    <>
+      <div
+        ref={divRef}
+        contentEditable
+        suppressContentEditableWarning
+        onInput={handleInput}
+        onKeyDown={handleKeyDown}
+        onPaste={handlePaste}
+        onClick={handleClick}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+        className={
+          className ??
+          'w-full min-h-[400px] bg-fog-100 rounded-xl border border-fog-300 px-5 py-4 text-sm text-navy-900 leading-relaxed focus:outline-none focus:ring-2 focus:ring-navy-500/20 transition-all'
+        }
+        style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+      />
+
+      {popover && (
+        <div
+          ref={popoverRef}
+          style={{
+            position: 'fixed',
+            left: Math.min(popover.x, (typeof window !== 'undefined' ? window.innerWidth : 800) - 280),
+            top: popover.y,
+            zIndex: 200,
+          }}
+          className="bg-white border border-fog-300 rounded-xl shadow-[0_8px_32px_rgba(14,30,53,0.15)] p-3 w-64"
+        >
+          {popover.confirming ? (
+            <div className="flex flex-col gap-3">
+              <p className="text-sm text-navy-800 font-medium">Remove this link?</p>
+              <p className="text-xs text-fog-400 leading-relaxed -mt-1">
+                The quote in the Quotes tab won&rsquo;t be deleted.
+              </p>
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setPopover(p => p ? { ...p, confirming: false } : null)}
+                  className="text-xs text-fog-500 hover:text-navy-700 px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleDeleteChip(popover.quoteId, popover.chipOffset)}
+                  className="text-xs text-white bg-rose-500 hover:bg-rose-600 px-3 py-1.5 rounded-lg font-medium transition-all"
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          ) : activeQuote ? (
+            <>
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-sm text-navy-800 leading-snug italic flex-1">
+                  &ldquo;{activeQuote.quote_text}&rdquo;
+                </p>
+                <button
+                  onClick={() => setPopover(p => p ? { ...p, confirming: true } : null)}
+                  className="shrink-0 p-1 text-fog-400 hover:text-rose-500 rounded transition-colors"
+                  title="Remove link"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
+                    <path fillRule="evenodd" d="M5 3.25V4H2.75a.75.75 0 0 0 0 1.5h.3l.815 8.15A1.5 1.5 0 0 0 5.357 15h5.285a1.5 1.5 0 0 0 1.493-1.35l.815-8.15h.3a.75.75 0 0 0 0-1.5H11v-.75A2.25 2.25 0 0 0 8.75 1h-1.5A2.25 2.25 0 0 0 5 3.25Zm2.25-.75a.75.75 0 0 0-.75.75V4h3v-.75a.75.75 0 0 0-.75-.75h-1.5ZM6.05 6a.75.75 0 0 1 .787.713l.275 5.5a.75.75 0 0 1-1.498.075l-.275-5.5A.75.75 0 0 1 6.05 6Zm3.9 0a.75.75 0 0 1 .712.787l-.275 5.5a.75.75 0 0 1-1.498-.075l.275-5.5a.75.75 0 0 1 .786-.711Z" clipRule="evenodd" />
+                  </svg>
+                </button>
+              </div>
+              {activeQuote.page_number != null && (
+                <p className="text-xs text-fog-400 mt-1.5">p. {activeQuote.page_number}</p>
+              )}
+              {activeQuote.tags.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {activeQuote.tags.map(tag => (
+                    <span
+                      key={tag}
+                      className="text-[10px] bg-fog-100 text-fog-600 border border-fog-300 px-1.5 py-0.5 rounded-full"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="text-xs text-fog-400 italic">Quote not found</p>
+          )}
+        </div>
+      )}
+    </>
+  )
+})
+
+export default BrainstormEditor

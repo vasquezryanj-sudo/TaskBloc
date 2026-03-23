@@ -1,0 +1,144 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import { supabase } from '@/lib/supabase'
+
+type Billing = 'monthly' | 'annual'
+
+const FREE_FEATURES = [
+  'Up to 3 active items',
+  'Books, articles & podcasts',
+  'Quotes & notes per item',
+  'Reading progress tracker',
+  'Offline access',
+]
+
+const PRO_FEATURES = [
+  'Unlimited active items',
+  'Everything in Free',
+  'Full PDF export',
+  'Tag search',
+  'Priority support',
+]
+
+export default function PricingPage() {
+  const router = useRouter()
+  const [billing, setBilling]     = useState<Billing>('annual')
+  const [loading, setLoading]     = useState(false)
+  const [isPro, setIsPro]         = useState(false)
+  const [checkingAuth, setCheckingAuth] = useState(true)
+  const [error, setError]         = useState('')
+
+  useEffect(() => {
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user) { setCheckingAuth(false); return }
+      const { data } = await supabase
+        .from('profiles')
+        .select('subscription_status, is_comped')
+        .eq('id', user.id)
+        .single()
+      setIsPro(data?.subscription_status === 'pro' || data?.is_comped === true)
+      setCheckingAuth(false)
+    })
+  }, [])
+
+  async function handleSubscribe() {
+    setError('')
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { router.push('/login'); return }
+
+    setLoading(true)
+    try {
+      const res = await fetch('/api/stripe/checkout', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ plan: billing }),
+      })
+      const json = await res.json()
+      if (!res.ok) { setError(json.error ?? 'Something went wrong'); return }
+      window.location.href = json.url
+    } catch {
+      setError('Network error — please try again')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleManage() {
+    setLoading(true)
+    try {
+      const res  = await fetch('/api/stripe/portal')
+      const json = await res.json()
+      if (!res.ok) { setError(json.error ?? 'Something went wrong'); return }
+      window.location.href = json.url
+    } catch {
+      setError('Network error — please try again')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const annualMonthly = (45 / 12).toFixed(2) // $3.75/mo
+
+  return (
+    <div className="min-h-screen bg-fog-200 flex flex-col">
+
+      {/* Nav */}
+      <header className="bg-white/80 border-b border-fog-300 backdrop-blur-xl sticky top-0 z-10">
+        <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
+          <Link href="/" className="text-2xl font-bold tracking-tight" style={{ color: '#191970' }}>
+            MindWell
+          </Link>
+          <Link
+            href="/home"
+            className="text-sm text-fog-600 hover:text-navy-700 transition-colors"
+          >
+            ← Back to app
+          </Link>
+        </div>
+      </header>
+
+      <main className="flex-1 max-w-4xl mx-auto px-6 py-16 w-full">
+
+        {/* Hero text */}
+        <div className="text-center mb-12">
+          <h1 className="text-4xl font-bold tracking-tight mb-3" style={{ color: '#191970' }}>
+            Simple, honest pricing
+          </h1>
+          <p className="text-fog-600 text-lg max-w-md mx-auto">
+            Start free. Upgrade when you need more room to grow.
+          </p>
+        </div>
+
+        {/* Billing toggle */}
+        <div className="flex justify-center mb-10">
+          <div className="flex items-center gap-1 bg-white border border-fog-300 rounded-full p-1 shadow-sm">
+            <button
+              onClick={() => setBilling('monthly')}
+              className={`px-5 py-2 rounded-full text-sm font-medium transition-all ${
+                billing === 'monthly'
+                  ? 'bg-navy-700 text-white shadow-sm'
+                  : 'text-fog-600 hover:text-navy-700'
+              }`}
+            >
+              Monthly
+            </button>
+            <button
+              onClick={() => setBilling('annual')}
+              className={`px-5 py-2 rounded-full text-sm font-medium transition-all flex items-center gap-2 ${
+                billing === 'annual'
+                  ? 'bg-navy-700 text-white shadow-sm'
+                  : 'text-fog-600 hover:text-navy-700'
+              }`}
+            >
+              Annual
+              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
+                billing === 'annual' ? 'bg-white/20 text-white' : 'bg-ember-100 text-ember-600'
+              }`}>
+                Save 37%
+              </span>
+            </button>
+          </div>
+        </div>

@@ -1,0 +1,11 @@
+Create a Terms of Service page at app/tos/page.tsx. Match the MindWell aesthetic. Use the following content:
+Terms of Service Last updated: March 2026
+By using MindWell, you agree to these terms.
+Use of the app MindWell is a personal reading and writing tool. You may use it for personal, non-commercial purposes. You may not use it to store illegal content or attempt to access other users' data.
+Your content You own everything you write in MindWell. We do not claim any rights to your notes, quotes, or annotations.
+Account You are responsible for maintaining access to your Google account used to sign in. We are not liable for any loss of access resulting from changes to your Google account.
+Availability We do our best to keep MindWell running but do not guarantee uptime or data retention. Back up anything important.
+Changes We may update these terms occasionally. Continued use of the app after changes constitutes acceptance.
+Limitation of liability MindWell is provided as-is. We are not liable for any damages arising from use of the app.
+Contact Questions? Reach us at mindwelladmin@gmail.com.
+Add a link to /tos in the footer of the landing page (app/page.tsx), the login page (app/login/page.tsx), and next to the Privacy Policy link on the privacy page (app/privacy/page.tsx). Push to GitHub when done.

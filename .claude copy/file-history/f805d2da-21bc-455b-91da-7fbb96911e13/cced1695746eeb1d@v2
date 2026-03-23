@@ -1,0 +1,63 @@
+'use client'
+
+import type { Quote } from '@/types'
+
+const QUOTE_TAG = /\[quote:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\]/g
+
+function quotePreview(text: string): string {
+  const words = text.trim().split(/\s+/).slice(0, 6).join(' ')
+  return text.trim().split(/\s+/).length > 6 ? words + '…' : words
+}
+
+interface Props {
+  text: string
+  quotes: Quote[]
+  onChipClick: (quoteId: string) => void
+  className?: string
+}
+
+export default function NoteRenderer({ text, quotes, onChipClick, className }: Props) {
+  const quoteMap = new Map(quotes.map(q => [q.id, q]))
+
+  // Split the text on [quote:uuid] tags, keeping the delimiters
+  const segments = text.split(QUOTE_TAG)
+  // split with a capturing group alternates: [text, id, text, id, text …]
+
+  const nodes: React.ReactNode[] = []
+  for (let i = 0; i < segments.length; i++) {
+    if (i % 2 === 0) {
+      // Plain text segment — preserve whitespace
+      if (segments[i]) nodes.push(<span key={i}>{segments[i]}</span>)
+    } else {
+      // UUID segment
+      const id = segments[i]
+      const quote = quoteMap.get(id)
+      if (quote) {
+        nodes.push(
+          <button
+            key={i}
+            type="button"
+            onClick={() => onChipClick(id)}
+            className="inline-flex items-center gap-1 px-2 py-0.5 mx-0.5 rounded-full bg-ember-100 text-ember-700 border border-ember-200 text-xs font-medium hover:bg-ember-200 transition-colors align-baseline cursor-pointer"
+            title={quote.quote_text}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-2.5 h-2.5 shrink-0 opacity-60">
+              <path d="M7.657 6.247c.11-.33.576-.33.686 0l.645 1.937a2.89 2.89 0 0 0 1.829 1.828l1.936.645c.33.11.33.576 0 .686l-1.937.645a2.89 2.89 0 0 0-1.828 1.829l-.645 1.936a.361.361 0 0 1-.686 0l-.645-1.937a2.89 2.89 0 0 0-1.828-1.828l-1.937-.645a.361.361 0 0 1 0-.686l1.937-.645a2.89 2.89 0 0 0 1.828-1.829l.645-1.936Z" />
+            </svg>
+            {quotePreview(quote.quote_text)}
+          </button>
+        )
+      } else {
+        // Quote was deleted — render nothing
+      }
+    }
+  }
+
+  return (
+    <div
+      className={className ?? 'w-full min-h-[400px] bg-fog-100 rounded-xl border border-fog-300 px-5 py-4 text-sm text-navy-900 leading-relaxed whitespace-pre-wrap'}
+    >
+      {nodes}
+    </div>
+  )
+}

@@ -1,0 +1,106 @@
+'use client'
+
+import { useState } from 'react'
+import Modal from './Modal'
+
+interface Props {
+  onClose: () => void
+  onSuccess: () => void
+}
+
+export default function AddBookModal({ onClose, onSuccess }: Props) {
+  const [form, setForm] = useState({ title: '', total_pages: '', current_page: '0' })
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setError('')
+    setLoading(true)
+
+    const res = await fetch('/api/books', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: form.title.trim(),
+        total_pages: Number(form.total_pages),
+        current_page: Number(form.current_page),
+        sessions_per_week: 4,
+      }),
+    })
+
+    if (!res.ok) {
+      const data = await res.json()
+      setError(data.error ?? 'Failed to add book')
+      setLoading(false)
+      return
+    }
+
+    onSuccess()
+    onClose()
+  }
+
+  return (
+    <Modal title="Add Book" onClose={onClose}>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Title</label>
+          <input
+            type="text"
+            required
+            autoFocus
+            value={form.title}
+            onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Book title"
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Total pages</label>
+            <input
+              type="number"
+              required
+              min={1}
+              value={form.total_pages}
+              onChange={e => setForm(f => ({ ...f, total_pages: e.target.value }))}
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="450"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Current page</label>
+            <input
+              type="number"
+              min={0}
+              value={form.current_page}
+              onChange={e => setForm(f => ({ ...f, current_page: e.target.value }))}
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="0"
+            />
+          </div>
+        </div>
+
+        {error && <p className="text-sm text-red-500">{error}</p>}
+
+        <div className="flex gap-3 pt-1">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 border border-slate-200 text-slate-600 px-4 py-2 rounded-lg text-sm hover:bg-slate-50 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={loading}
+            className="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+          >
+            {loading ? 'Adding…' : 'Add Book'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  )
+}

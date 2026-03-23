@@ -1,0 +1,343 @@
+'use client'
+
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
+import type { Book, Quote, SearchResult } from '@/types'
+
+const TAG_PALETTES = [
+  'bg-blue-900/60 text-blue-300 border-blue-700/50',
+  'bg-violet-900/60 text-violet-300 border-violet-700/50',
+  'bg-emerald-900/60 text-emerald-300 border-emerald-700/50',
+  'bg-amber-900/60 text-amber-300 border-amber-700/50',
+  'bg-rose-900/60 text-rose-300 border-rose-700/50',
+  'bg-teal-900/60 text-teal-300 border-teal-700/50',
+  'bg-indigo-900/60 text-indigo-300 border-indigo-700/50',
+  'bg-orange-900/60 text-orange-300 border-orange-700/50',
+]
+
+function tagColor(tag: string): string {
+  let hash = 0
+  for (let i = 0; i < tag.length; i++) {
+    hash = (hash * 31 + tag.charCodeAt(i)) & 0xffffffff
+  }
+  return TAG_PALETTES[Math.abs(hash) % TAG_PALETTES.length]
+}
+
+function highlight(text: string, query: string): React.ReactNode {
+  if (!query.trim()) return text
+  const idx = text.toLowerCase().indexOf(query.toLowerCase())
+  if (idx === -1) return text
+  return (
+    <>
+      {text.slice(0, idx)}
+      <mark className="bg-gold-400/25 text-gold-300 rounded-sm">{text.slice(idx, idx + query.length)}</mark>
+      {text.slice(idx + query.length)}
+    </>
+  )
+}
+
+function excerpt(text: string, query: string, maxLen = 160): string {
+  const idx = text.toLowerCase().indexOf(query.toLowerCase())
+  if (idx === -1) return text.slice(0, maxLen) + (text.length > maxLen ? '…' : '')
+  const start = Math.max(0, idx - 40)
+  const end = Math.min(text.length, idx + query.length + 100)
+  return (start > 0 ? '…' : '') + text.slice(start, end) + (end < text.length ? '…' : '')
+}
+
+// Group results by book
+function groupByBook(results: SearchResult[]): Map<string, { title: string; items: SearchResult[] }> {
+  const map = new Map<string, { title: string; items: SearchResult[] }>()
+  for (const r of results) {
+    if (!map.has(r.bookId)) {
+      map.set(r.bookId, { title: r.bookTitle, items: [] })
+    }
+    map.get(r.bookId)!.items.push(r)
+  }
+  return map
+}
+
+function groupTagResultsByBook(quotes: (Quote & { book: Book })[]): Map<string, { title: string; quotes: (Quote & { book: Book })[] }> {
+  const map = new Map<string, { title: string; quotes: (Quote & { book: Book })[] }>()
+  for (const q of quotes) {
+    if (!map.has(q.book_id)) {
+      map.set(q.book_id, { title: q.book.title, quotes: [] })
+    }
+    map.get(q.book_id)!.quotes.push(q)
+  }
+  return map
+}
+
+function typeLabel(r: SearchResult): string {
+  if (r.type === 'quote') return 'Quote'
+  const tab = r.tab ?? 'note'
+  return tab.charAt(0).toUpperCase() + tab.slice(1)
+}
+
+function typeBadge(r: SearchResult): string {
+  if (r.type === 'quote') return 'bg-gold-900/50 text-gold-300 border-gold-700/50'
+  return 'bg-well-800/80 text-well-300 border-well-700/50'
+}
+
+interface Props {
+  onClose: () => void
+}
+
+export default function GlobalSearch({ onClose }: Props) {
+  const router = useRouter()
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<SearchResult[]>([])
+  const [tagResults, setTagResults] = useState<(Quote & { book: Book })[]>([])
+  const [loading, setLoading] = useState(false)
+  const [exportingPDF, setExportingPDF] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const isTagMode = query.trim().startsWith('#')
+  const tagQuery = isTagMode ? query.trim().slice(1).trim() : ''
+
+  useEffect(() => {
+    inputRef.current?.focus()
+  }, [])
+
+  // Close on Escape
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const searchText = useCallback(async (q: string) => {
+    if (!q.trim() || q.trim().length < 2) {
+      setResults([])
+      setLoading(false)
+      return
+    }
+    setLoading(true)
+    const res = await fetch(`/api/search?q=${encodeURIComponent(q.trim())}`)
+    const json = await res.json()
+    setResults(json.results ?? [])
+    setLoading(false)
+  }, [])
+
+  const searchTag = useCallback(async (tag: string) => {
+    if (!tag.trim() || tag.trim().length < 1) {
+      setTagResults([])
+      setLoading(false)
+      return
+    }
+    setLoading(true)
+    const res = await fetch(`/api/tag-search?tag=${encodeURIComponent(tag.trim())}`)
+    const json = await res.json()
+    setTagResults(json.quotes ?? [])
+    setLoading(false)
+  }, [])
+
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const val = e.target.value
+    setQuery(val)
+    setResults([])
+    setTagResults([])
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+
+    const trimmed = val.trim()
+    if (trimmed.startsWith('#')) {
+      const tag = trimmed.slice(1).trim()
+      debounceRef.current = setTimeout(() => searchTag(tag), 300)
+    } else {
+      debounceRef.current = setTimeout(() => searchText(val), 300)
+    }
+  }
+
+  function navigateTo(result: SearchResult) {
+    router.push(`/books/${result.bookId}?tab=${result.type === 'quote' ? 'quotes' : (result.tab ?? 'outline')}`)
+    onClose()
+  }
+
+  async function handleExportTagPDF() {
+    if (!tagQuery) return
+    setExportingPDF(true)
+    const res = await fetch(`/api/export/tag-search?tag=${encodeURIComponent(tagQuery)}`)
+    if (res.ok) {
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${tagQuery}-quotes.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+    }
+    setExportingPDF(false)
+  }
+
+  const groups = groupByBook(results)
+  const tagGroups = groupTagResultsByBook(tagResults)
+
+  const minLen = isTagMode ? 1 : 2
+  const hasQuery = isTagMode ? tagQuery.length >= minLen : query.trim().length >= minLen
+  const hasResults = isTagMode ? tagResults.length > 0 : results.length > 0
+
+  return (
+    <div
+      className="fixed inset-0 bg-well-950/90 backdrop-blur-sm flex items-start justify-center z-50 pt-[15vh] px-4"
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div className="w-full max-w-2xl bg-well-900 rounded-2xl shadow-[0_24px_80px_rgba(0,0,0,0.95),0_0_0_1px_rgba(255,255,255,0.06)] overflow-hidden">
+
+        {/* Search input */}
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-well-800">
+          {isTagMode ? (
+            <span className="text-gold-400 font-semibold text-base shrink-0">#</span>
+          ) : (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-well-400 shrink-0">
+              <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11ZM2 9a7 7 0 1 1 12.452 4.391l3.328 3.329a.75.75 0 1 1-1.06 1.06l-3.329-3.328A7 7 0 0 1 2 9Z" clipRule="evenodd" />
+            </svg>
+          )}
+          <input
+            ref={inputRef}
+            type="text"
+            value={query}
+            onChange={handleChange}
+            placeholder="Search notes, quotes… or #tag for tag search"
+            className="flex-1 bg-transparent text-well-50 placeholder:text-well-400 text-base outline-none"
+          />
+          {loading && (
+            <div className="w-4 h-4 border-2 border-well-700 border-t-cream-400 rounded-full animate-spin shrink-0" />
+          )}
+          {isTagMode && tagResults.length > 0 && (
+            <button
+              onClick={handleExportTagPDF}
+              disabled={exportingPDF}
+              className="shrink-0 text-xs text-well-950 bg-cream-200 hover:bg-cream-100 px-3 py-1.5 rounded-full font-medium transition-all disabled:opacity-50"
+            >
+              {exportingPDF ? 'Exporting…' : '↓ PDF'}
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            className="text-well-400 hover:text-well-100 text-xl leading-none shrink-0 transition-colors"
+          >
+            ×
+          </button>
+        </div>
+
+        {/* Results */}
+        <div className="max-h-[60vh] overflow-y-auto">
+          {hasQuery && !loading && !hasResults && (
+            <div className="px-5 py-10 text-center text-well-400 text-sm">
+              No results for &ldquo;{isTagMode ? `#${tagQuery}` : query}&rdquo;
+            </div>
+          )}
+
+          {!hasQuery && (
+            <div className="px-5 py-8 text-center text-well-400 text-sm">
+              {isTagMode ? 'Type a tag name to search across all books' : 'Type at least 2 characters to search · Use #tag for tag search'}
+            </div>
+          )}
+
+          {/* Tag mode results */}
+          {isTagMode && tagResults.length > 0 && (
+            <div className="py-2">
+              <div className="px-5 py-2 border-b border-well-800/60">
+                <p className="text-[11px] text-well-500">
+                  {tagResults.length} quote{tagResults.length !== 1 ? 's' : ''} tagged <span className="text-gold-400 font-semibold">#{tagQuery}</span>
+                </p>
+              </div>
+              {Array.from(tagGroups.entries()).map(([bookId, group]) => (
+                <div key={bookId}>
+                  <div className="px-5 py-2 sticky top-0 bg-well-900/95 backdrop-blur-sm border-b border-well-800/60 z-10">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-well-300">
+                      {group.title}
+                    </p>
+                  </div>
+                  {group.quotes.map(quote => (
+                    <button
+                      key={quote.id}
+                      onClick={() => { router.push(`/books/${quote.book_id}?tab=quotes`); onClose() }}
+                      className="w-full text-left px-5 py-3 hover:bg-well-800/60 transition-colors border-b border-well-800/20 last:border-0"
+                    >
+                      <p className="text-sm text-well-100 leading-relaxed">
+                        &ldquo;{quote.quote_text}&rdquo;
+                      </p>
+                      {quote.page_number != null && (
+                        <p className="text-xs text-well-400 mt-1">p.{quote.page_number}</p>
+                      )}
+                      {quote.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {quote.tags.map(tag => (
+                            <span key={tag} className={`text-xs px-1.5 py-0.5 rounded-full border ${tagColor(tag)}`}>
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Text search results */}
+          {!isTagMode && results.length > 0 && (
+            <div className="py-2">
+              {Array.from(groups.entries()).map(([bookId, group]) => (
+                <div key={bookId}>
+                  {/* Book heading */}
+                  <div className="px-5 py-2 sticky top-0 bg-well-900/95 backdrop-blur-sm border-b border-well-800/60 z-10">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-well-300">
+                      {group.title}
+                    </p>
+                  </div>
+
+                  {/* Results for this book */}
+                  {group.items.map(result => (
+                    <button
+                      key={`${result.type}-${result.id}`}
+                      onClick={() => navigateTo(result)}
+                      className="w-full text-left px-5 py-3 hover:bg-well-800/60 transition-colors border-b border-well-800/20 last:border-0"
+                    >
+                      <div className="flex items-start gap-3">
+                        <span className={`shrink-0 mt-0.5 text-[10px] font-bold uppercase tracking-wider border px-1.5 py-0.5 rounded ${typeBadge(result)}`}>
+                          {typeLabel(result)}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-well-100 leading-relaxed">
+                            {result.type === 'quote'
+                              ? <>&ldquo;{highlight(excerpt(result.content, query), query)}&rdquo;</>
+                              : highlight(excerpt(result.content, query), query)
+                            }
+                          </p>
+                          {result.type === 'quote' && result.pageNumber != null && (
+                            <p className="text-xs text-well-400 mt-1">p.{result.pageNumber}</p>
+                          )}
+                          {result.tags && result.tags.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1.5">
+                              {result.tags.map(tag => (
+                                <span key={tag} className={`text-xs px-1.5 py-0.5 rounded-full border ${tagColor(tag)}`}>
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 py-2.5 border-t border-well-800/60 flex items-center gap-4 text-xs text-well-500">
+          <span><kbd className="font-mono bg-well-800 px-1.5 py-0.5 rounded text-well-400">↵</kbd> to navigate</span>
+          <span><kbd className="font-mono bg-well-800 px-1.5 py-0.5 rounded text-well-400">Esc</kbd> to close</span>
+          {!isTagMode && <span className="text-well-600">Tip: type <span className="text-gold-500">#tag</span> to search by tag</span>}
+        </div>
+      </div>
+    </div>
+  )
+}

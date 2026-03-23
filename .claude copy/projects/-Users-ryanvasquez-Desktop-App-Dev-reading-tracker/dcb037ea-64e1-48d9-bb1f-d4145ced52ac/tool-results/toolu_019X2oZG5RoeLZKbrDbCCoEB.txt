@@ -1,0 +1,1199 @@
+     1→     1→'use client'
+     2→     2→
+     3→     3→import { Suspense, useState, useEffect, useCallback, useRef } from 'react'
+     4→     4→import { useRouter, useSearchParams } from 'next/navigation'
+     5→     5→import { format, parseISO } from 'date-fns'
+     6→     6→import { supabase } from '@/lib/supabase'
+     7→     7→import { cacheBooks, getCachedBooks } from '@/lib/localCache'
+     8→     8→import { getPendingBooks, processQueue } from '@/lib/syncQueue'
+     9→     9→import {
+    10→    10→  DndContext,
+    11→    11→  closestCenter,
+    12→    12→  DragEndEvent,
+    13→    13→  DragOverlay,
+    14→    14→  DragStartEvent,
+    15→    15→  PointerSensor,
+    16→    16→  useDroppable,
+    17→    17→  useSensor,
+    18→    18→  useSensors,
+    19→    19→} from '@dnd-kit/core'
+    20→    20→import {
+    21→    21→  SortableContext,
+    22→    22→  useSortable,
+    23→    23→  verticalListSortingStrategy,
+    24→    24→  arrayMove,
+    25→    25→} from '@dnd-kit/sortable'
+    26→    26→import { CSS } from '@dnd-kit/utilities'
+    27→    27→import AddItemModal from '@/components/AddItemModal'
+    28→    28→import DetailModal from '@/components/DetailModal'
+    29→    29→import GlobalSearch from '@/components/GlobalSearch'
+    30→    30→import { useAuth } from '@/components/AuthProvider'
+    31→    31→import RecentlyViewedDropdown from '@/components/RecentlyViewedDropdown'
+    32→    32→import { trackRecentlyViewed } from '@/lib/recentlyViewed'
+    33→    33→import type { Book } from '@/types'
+    34→    34→
+    35→    35→const READING_SECTION = '__reading-now__'
+    36→    36→const QUEUE_SECTION = '__next-up__'
+    37→    37→
+    38→    38→// ── Drag handle ────────────────────────────────────────────────────────────────
+    39→    39→
+    40→    40→function DragHandle() {
+    41→    41→  return (
+    42→    42→    <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor">
+    43→    43→      <circle cx="4" cy="3" r="1.5" />
+    44→    44→      <circle cx="8" cy="3" r="1.5" />
+    45→    45→      <circle cx="4" cy="8" r="1.5" />
+    46→    46→      <circle cx="8" cy="8" r="1.5" />
+    47→    47→      <circle cx="4" cy="13" r="1.5" />
+    48→    48→      <circle cx="8" cy="13" r="1.5" />
+    49→    49→    </svg>
+    50→    50→  )
+    51→    51→}
+    52→    52→
+    53→    53→// ── Complete check button ──────────────────────────────────────────────────────
+    54→    54→
+    55→    55→function CompleteButton({ onClick, loading = false }: { onClick: () => void; loading?: boolean }) {
+    56→    56→  return (
+    57→    57→    <button
+    58→    58→      onClick={e => { e.stopPropagation(); onClick() }}
+    59→    59→      disabled={loading}
+    60→    60→      className="w-7 h-7 flex items-center justify-center rounded-full text-fog-400 hover:text-white hover:bg-navy-700 transition-all disabled:opacity-40 shrink-0"
+    61→    61→      title="Mark complete"
+    62→    62→    >
+    63→    63→      {loading ? (
+    64→    64→        <span className="text-[10px]">…</span>
+    65→    65→      ) : (
+    66→    66→        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+    67→    67→          <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd" />
+    68→    68→        </svg>
+    69→    69→      )}
+    70→    70→    </button>
+    71→    71→  )
+    72→    72→}
+    73→    73→
+    74→    74→// ── Folder pill (shows assigned folder with remove) ─────────────────────────────
+    75→    75→
+    76→    76→function FolderPill({ name, onRemove }: { name: string; onRemove: () => void }) {
+    77→    77→  return (
+    78→    78→    <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 max-w-[120px]">
+    79→    79→      <span className="truncate">{name}</span>
+    80→    80→      <button
+    81→    81→        onClick={e => { e.stopPropagation(); onRemove() }}
+    82→    82→        className="text-amber-400 hover:text-amber-700 transition-colors shrink-0 leading-none"
+    83→    83→        aria-label="Remove folder"
+    84→    84→      >
+    85→    85→        ×
+    86→    86→      </button>
+    87→    87→    </span>
+    88→    88→  )
+    89→    89→}
+    90→    90→
+    91→    91→// ── Folder picker dropdown ──────────────────────────────────────────────────────
+    92→    92→
+    93→    93→function FolderPicker({
+    94→    94→  book,
+    95→    95→  allBooks,
+    96→    96→  onAssign,
+    97→    97→}: {
+    98→    98→  book: Book
+    99→    99→  allBooks: Book[]
+   100→   100→  onAssign: (bookId: string, folderName: string | null) => Promise<void>
+   101→   101→}) {
+   102→   102→  const [open, setOpen] = useState(false)
+   103→   103→  const [creating, setCreating] = useState(false)
+   104→   104→  const [newName, setNewName] = useState('')
+   105→   105→  const ref = useRef<HTMLDivElement>(null)
+   106→   106→  const inputRef = useRef<HTMLInputElement>(null)
+   107→   107→
+   108→   108→  const existingFolders = Array.from(
+   109→   109→    new Set(allBooks.map(b => b.folder_name).filter((f): f is string => !!f))
+   110→   110→  ).sort((a, b) => a.localeCompare(b))
+   111→   111→
+   112→   112→  useEffect(() => {
+   113→   113→    if (!open) return
+   114→   114→    function handleClick(e: MouseEvent) {
+   115→   115→      if (ref.current && !ref.current.contains(e.target as Node)) {
+   116→   116→        setOpen(false)
+   117→   117→        setCreating(false)
+   118→   118→        setNewName('')
+   119→   119→      }
+   120→   120→    }
+   121→   121→    function handleKey(e: KeyboardEvent) {
+   122→   122→      if (e.key === 'Escape') {
+   123→   123→        setOpen(false)
+   124→   124→        setCreating(false)
+   125→   125→        setNewName('')
+   126→   126→      }
+   127→   127→    }
+   128→   128→    document.addEventListener('pointerdown', handleClick)
+   129→   129→    document.addEventListener('keydown', handleKey)
+   130→   130→    return () => {
+   131→   131→      document.removeEventListener('pointerdown', handleClick)
+   132→   132→      document.removeEventListener('keydown', handleKey)
+   133→   133→    }
+   134→   134→  }, [open])
+   135→   135→
+   136→   136→  useEffect(() => {
+   137→   137→    if (creating) inputRef.current?.focus()
+   138→   138→  }, [creating])
+   139→   139→
+   140→   140→  function handleSelect(folder: string) {
+   141→   141→    onAssign(book.id, folder)
+   142→   142→    setOpen(false)
+   143→   143→    setCreating(false)
+   144→   144→    setNewName('')
+   145→   145→  }
+   146→   146→
+   147→   147→  function handleCreate() {
+   148→   148→    const trimmed = newName.trim()
+   149→   149→    if (!trimmed) return
+   150→   150→    onAssign(book.id, trimmed)
+   151→   151→    setOpen(false)
+   152→   152→    setCreating(false)
+   153→   153→    setNewName('')
+   154→   154→  }
+   155→   155→
+   156→   156→  return (
+   157→   157→    <div ref={ref} className="relative shrink-0">
+   158→   158→      <button
+   159→   159→        onClick={e => { e.stopPropagation(); setOpen(o => !o) }}
+   160→   160→        className="w-7 h-7 flex items-center justify-center rounded-full text-fog-400 hover:text-navy-700 hover:bg-fog-100 transition-all"
+   161→   161→        title="Assign folder"
+   162→   162→      >
+   163→   163→        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+   164→   164→          <path d="M3.75 3A1.75 1.75 0 0 0 2 4.75v3.26a3.235 3.235 0 0 1 1.75-.51h12.5c.644 0 1.245.188 1.75.51V6.75A1.75 1.75 0 0 0 16.25 5h-4.836a.25.25 0 0 1-.177-.073L9.823 3.513A1.75 1.75 0 0 0 8.586 3H3.75ZM3.75 9A1.75 1.75 0 0 0 2 10.75v4.5c0 .966.784 1.75 1.75 1.75h12.5A1.75 1.75 0 0 0 18 15.25v-4.5A1.75 1.75 0 0 0 16.25 9H3.75Z" />
+   165→   165→        </svg>
+   166→   166→      </button>
+   167→   167→
+   168→   168→      {open && (
+   169→   169→        <div
+   170→   170→          className="absolute right-0 top-full mt-1 w-52 bg-white rounded-xl border border-fog-300 shadow-lg z-50 py-1 overflow-hidden"
+   171→   171→          onClick={e => e.stopPropagation()}
+   172→   172→        >
+   173→   173→          {/* New folder */}
+   174→   174→          {creating ? (
+   175→   175→            <div className="px-3 py-2 flex items-center gap-1.5">
+   176→   176→              <input
+   177→   177→                ref={inputRef}
+   178→   178→                type="text"
+   179→   179→                value={newName}
+   180→   180→                onChange={e => setNewName(e.target.value)}
+   181→   181→                onKeyDown={e => { if (e.key === 'Enter') handleCreate() }}
+   182→   182→                placeholder="Folder name"
+   183→   183→                className="flex-1 min-w-0 text-sm px-2 py-1 rounded-lg border border-fog-300 focus:border-navy-400 focus:outline-none"
+   184→   184→              />
+   185→   185→              <button
+   186→   186→                onClick={handleCreate}
+   187→   187→                disabled={!newName.trim()}
+   188→   188→                className="text-xs font-medium text-navy-700 hover:text-navy-900 px-2 py-1 rounded-lg hover:bg-fog-100 transition-all disabled:opacity-30"
+   189→   189→              >
+   190→   190→                Add
+   191→   191→              </button>
+   192→   192→            </div>
+   193→   193→          ) : (
+   194→   194→            <button
+   195→   195→              onClick={() => setCreating(true)}
+   196→   196→              className="w-full text-left px-3 py-2 text-sm text-navy-700 hover:bg-fog-100 transition-colors"
+   197→   197→            >
+   198→   198→              Add to new folder…
+   199→   199→            </button>
+   200→   200→          )}
+   201→   201→
+   202→   202→          {/* Existing folders */}
+   203→   203→          {existingFolders.length > 0 && (
+   204→   204→            <>
+   205→   205→              <div className="border-t border-fog-200 my-1" />
+   206→   206→              {existingFolders.map(folder => (
+   207→   207→                <button
+   208→   208→                  key={folder}
+   209→   209→                  onClick={() => handleSelect(folder)}
+   210→   210→                  className={`w-full text-left px-3 py-2 text-sm hover:bg-fog-100 transition-colors truncate ${
+   211→   211→                    book.folder_name === folder ? 'text-amber-700 font-medium' : 'text-navy-800'
+   212→   212→                  }`}
+   213→   213→                >
+   214→   214→                  {folder}
+   215→   215→                </button>
+   216→   216→              ))}
+   217→   217→            </>
+   218→   218→          )}
+   219→   219→        </div>
+   220→   220→      )}
+   221→   221→    </div>
+   222→   222→  )
+   223→   223→}
+   224→   224→
+   225→   225→// ── Sortable book row (Reading Now / Next Up) ──────────────────────────────────
+   226→   226→
+   227→   227→function SortableBookRow({
+   228→   228→  book,
+   229→   229→  onOpenDetail,
+   230→   230→  onComplete,
+   231→   231→  onMoveUp,
+   232→   232→  showEmoji,
+   233→   233→  allBooks,
+   234→   234→  onAssignFolder,
+   235→   235→}: {
+   236→   236→  book: Book
+   237→   237→  onOpenDetail: () => void
+   238→   238→  onComplete: (book: Book) => void
+   239→   239→  onMoveUp?: () => void
+   240→   240→  showEmoji?: boolean
+   241→   241→  allBooks: Book[]
+   242→   242→  onAssignFolder: (bookId: string, folderName: string | null) => Promise<void>
+   243→   243→}) {
+   244→   244→  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+   245→   245→    id: book.id,
+   246→   246→  })
+   247→   247→
+   248→   248→  const style = {
+   249→   249→    transform: CSS.Transform.toString(transform),
+   250→   250→    transition,
+   251→   251→    opacity: isDragging ? 0.3 : 1,
+   252→   252→  }
+   253→   253→
+   254→   254→  const pct = book.total_pages && book.total_pages > 0
+   255→   255→    ? Math.round(((book.current_page ?? 0) / book.total_pages) * 100)
+   256→   256→    : 0
+   257→   257→  const isQueued = book.status === 'queued' || book.status === 'paused'
+   258→   258→
+   259→   259→  return (
+   260→   260→    <div
+   261→   261→      ref={setNodeRef}
+   262→   262→      style={style}
+   263→   263→      className="bg-white rounded-xl border border-fog-300 shadow-sm hover:border-fog-400 hover:shadow-md transition-all flex items-center gap-3 px-3 py-3"
+   264→   264→    >
+   265→   265→      {/* Drag handle */}
+   266→   266→      <button
+   267→   267→        {...attributes}
+   268→   268→        {...listeners}
+   269→   269→        className="text-fog-300 hover:text-fog-500 cursor-grab active:cursor-grabbing shrink-0 touch-none transition-colors"
+   270→   270→        aria-label="Drag to reorder"
+   271→   271→      >
+   272→   272→        <DragHandle />
+   273→   273→      </button>
+   274→   274→
+   275→   275→      {/* Clickable content */}
+   276→   276→      <button
+   277→   277→        onClick={onOpenDetail}
+   278→   278→        className="flex-1 min-w-0 text-left"
+   279→   279→      >
+   280→   280→        <p className="font-medium text-navy-900 truncate text-sm leading-snug">
+   281→   281→          {showEmoji ? '📚 ' : ''}{book.title}
+   282→   282→        </p>
+   283→   283→        {book.author && (
+   284→   284→          <p className="text-xs text-fog-500 mt-0.5 truncate">{book.author}</p>
+   285→   285→        )}
+   286→   286→        {book.folder_name && (
+   287→   287→          <div className="mt-1">
+   288→   288→            <FolderPill name={book.folder_name} onRemove={() => onAssignFolder(book.id, null)} />
+   289→   289→          </div>
+   290→   290→        )}
+   291→   291→        {!isQueued && book.total_pages && book.total_pages > 0 && (
+   292→   292→          <div className="flex items-center gap-2 mt-1.5">
+   293→   293→            <div className="w-28 bg-fog-200 rounded-full h-1.5">
+   294→   294→              <div
+   295→   295→                className="bg-gradient-to-r from-[#a8e063] to-[#2d6a4f] h-1.5 rounded-full transition-all"
+   296→   296→                style={{ width: `${pct}%` }}
+   297→   297→              />
+   298→   298→            </div>
+   299→   299→            <span className="text-xs text-fog-400">
+   300→   300→              p.{book.current_page ?? 0}/{book.total_pages}
+   301→   301→            </span>
+   302→   302→          </div>
+   303→   303→        )}
+   304→   304→      </button>
+   305→   305→
+   306→   306→      {/* Folder picker */}
+   307→   307→      <FolderPicker book={book} allBooks={allBooks} onAssign={onAssignFolder} />
+   308→   308→
+   309→   309→      {/* Action */}
+   310→   310→      {onMoveUp ? (
+   311→   311→        <button
+   312→   312→          onClick={e => { e.stopPropagation(); onMoveUp() }}
+   313→   313→          className="text-xs text-fog-500 hover:text-navy-700 px-2.5 py-1 rounded-full bg-fog-100 hover:bg-navy-100 transition-all shrink-0"
+   314→   314→        >
+   315→   315→          Start
+   316→   316→        </button>
+   317→   317→      ) : (
+   318→   318→        <CompleteButton onClick={() => onComplete(book)} />
+   319→   319→      )}
+   320→   320→    </div>
+   321→   321→  )
+   322→   322→}
+   323→   323→
+   324→   324→// ── Drag overlay ───────────────────────────────────────────────────────────────
+   325→   325→
+   326→   326→function BookDragOverlay({ book }: { book: Book }) {
+   327→   327→  return (
+   328→   328→    <div className="bg-white rounded-xl border border-navy-200 shadow-[0_12px_40px_rgba(14,30,53,0.15)] px-3 py-3 flex items-center gap-3 cursor-grabbing opacity-95">
+   329→   329→      <div className="text-fog-300">
+   330→   330→        <DragHandle />
+   331→   331→      </div>
+   332→   332→      <div className="flex-1 min-w-0">
+   333→   333→        <p className="font-medium text-navy-900 truncate text-sm">{book.title}</p>
+   334→   334→        {book.author && <p className="text-xs text-fog-500 mt-0.5">{book.author}</p>}
+   335→   335→      </div>
+   336→   336→    </div>
+   337→   337→  )
+   338→   338→}
+   339→   339→
+   340→   340→// ── Droppable section ──────────────────────────────────────────────────────────
+   341→   341→
+   342→   342→function DroppableSection({
+   343→   343→  id,
+   344→   344→  children,
+   345→   345→  className = '',
+   346→   346→}: {
+   347→   347→  id: string
+   348→   348→  children: React.ReactNode
+   349→   349→  className?: string
+   350→   350→}) {
+   351→   351→  const { setNodeRef, isOver } = useDroppable({ id })
+   352→   352→  return (
+   353→   353→    <div
+   354→   354→      ref={setNodeRef}
+   355→   355→      className={`${className} rounded-xl transition-all ${isOver ? 'ring-2 ring-navy-300/40' : ''}`}
+   356→   356→    >
+   357→   357→      {children}
+   358→   358→    </div>
+   359→   359→  )
+   360→   360→}
+   361→   361→
+   362→   362→// ── Article card ───────────────────────────────────────────────────────────────
+   363→   363→
+   364→   364→function ArticleCard({
+   365→   365→  book,
+   366→   366→  onOpenDetail,
+   367→   367→  onDone,
+   368→   368→  allBooks,
+   369→   369→  onAssignFolder,
+   370→   370→}: {
+   371→   371→  book: Book
+   372→   372→  onOpenDetail: () => void
+   373→   373→  onDone: () => void
+   374→   374→  allBooks: Book[]
+   375→   375→  onAssignFolder: (bookId: string, folderName: string | null) => Promise<void>
+   376→   376→}) {
+   377→   377→  const [loading, setLoading] = useState(false)
+   378→   378→
+   379→   379→  async function handleDone() {
+   380→   380→    setLoading(true)
+   381→   381→    await onDone()
+   382→   382→    setLoading(false)
+   383→   383→  }
+   384→   384→
+   385→   385→  const meta = [book.publication, book.article_date].filter(Boolean).join(' · ')
+   386→   386→
+   387→   387→  return (
+   388→   388→    <div className="bg-white rounded-xl border border-fog-300 shadow-sm hover:border-fog-400 hover:shadow-md transition-all flex items-center gap-3 px-4 py-3">
+   389→   389→      <button onClick={onOpenDetail} className="flex-1 min-w-0 text-left">
+   390→   390→        <p className="font-medium text-navy-900 truncate text-sm leading-snug">{book.title}</p>
+   391→   391→        <p className="text-xs text-fog-500 mt-0.5 truncate">
+   392→   392→          {[book.author, meta].filter(Boolean).join(' · ') || <span className="italic opacity-60">Article</span>}
+   393→   393→        </p>
+   394→   394→        {book.folder_name && (
+   395→   395→          <div className="mt-1">
+   396→   396→            <FolderPill name={book.folder_name} onRemove={() => onAssignFolder(book.id, null)} />
+   397→   397→          </div>
+   398→   398→        )}
+   399→   399→      </button>
+   400→   400→      <FolderPicker book={book} allBooks={allBooks} onAssign={onAssignFolder} />
+   401→   401→      <CompleteButton onClick={handleDone} loading={loading} />
+   402→   402→    </div>
+   403→   403→  )
+   404→   404→}
+   405→   405→
+   406→   406→// ── Podcast card ───────────────────────────────────────────────────────────────
+   407→   407→
+   408→   408→function PodcastCard({
+   409→   409→  book,
+   410→   410→  onOpenDetail,
+   411→   411→  onDone,
+   412→   412→  allBooks,
+   413→   413→  onAssignFolder,
+   414→   414→}: {
+   415→   415→  book: Book
+   416→   416→  onOpenDetail: () => void
+   417→   417→  onDone: () => void
+   418→   418→  allBooks: Book[]
+   419→   419→  onAssignFolder: (bookId: string, folderName: string | null) => Promise<void>
+   420→   420→}) {
+   421→   421→  const [loading, setLoading] = useState(false)
+   422→   422→
+   423→   423→  async function handleDone() {
+   424→   424→    setLoading(true)
+   425→   425→    await onDone()
+   426→   426→    setLoading(false)
+   427→   427→  }
+   428→   428→
+   429→   429→  const meta = [book.show_title, book.air_date].filter(Boolean).join(' · ')
+   430→   430→
+   431→   431→  return (
+   432→   432→    <div className="bg-white rounded-xl border border-fog-300 shadow-sm hover:border-fog-400 hover:shadow-md transition-all flex items-center gap-3 px-4 py-3">
+   433→   433→      <button onClick={onOpenDetail} className="flex-1 min-w-0 text-left">
+   434→   434→        <p className="font-medium text-navy-900 truncate text-sm leading-snug">{book.title}</p>
+   435→   435→        <p className="text-xs text-fog-500 mt-0.5 truncate">
+   436→   436→          {meta || <span className="italic opacity-60">Podcast</span>}
+   437→   437→        </p>
+   438→   438→        {book.folder_name && (
+   439→   439→          <div className="mt-1">
+   440→   440→            <FolderPill name={book.folder_name} onRemove={() => onAssignFolder(book.id, null)} />
+   441→   441→          </div>
+   442→   442→        )}
+   443→   443→      </button>
+   444→   444→      <FolderPicker book={book} allBooks={allBooks} onAssign={onAssignFolder} />
+   445→   445→      <CompleteButton onClick={handleDone} loading={loading} />
+   446→   446→    </div>
+   447→   447→  )
+   448→   448→}
+   449→   449→
+   450→   450→// ── Confirm complete modal ─────────────────────────────────────────────────────
+   451→   451→
+   452→   452→function ConfirmCompleteModal({
+   453→   453→  book,
+   454→   454→  onClose,
+   455→   455→  onConfirm,
+   456→   456→}: {
+   457→   457→  book: Book
+   458→   458→  onClose: () => void
+   459→   459→  onConfirm: () => void
+   460→   460→}) {
+   461→   461→  const [loading, setLoading] = useState(false)
+   462→   462→
+   463→   463→  async function handleConfirm() {
+   464→   464→    setLoading(true)
+   465→   465→    await onConfirm()
+   466→   466→    setLoading(false)
+   467→   467→  }
+   468→   468→
+   469→   469→  return (
+   470→   470→    <div
+   471→   471→      className="fixed inset-0 bg-navy-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+   472→   472→      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+   473→   473→    >
+   474→   474→      <div className="bg-white rounded-2xl shadow-[0_24px_80px_rgba(14,30,53,0.2)] w-full max-w-sm p-6">
+   475→   475→        <h2 className="font-semibold text-navy-900 mb-2">Finish &ldquo;{book.title}&rdquo;?</h2>
+   476→   476→        <p className="text-sm text-fog-600 leading-relaxed">
+   477→   477→          This will mark the book as completed and move it to your finished list.
+   478→   478→        </p>
+   479→   479→        <div className="flex gap-3 mt-5">
+   480→   480→          <button
+   481→   481→            onClick={onClose}
+   482→   482→            className="flex-1 bg-fog-100 hover:bg-fog-200 text-navy-700 px-4 py-2.5 rounded-full text-sm font-medium transition-all"
+   483→   483→          >
+   484→   484→            Cancel
+   485→   485→          </button>
+   486→   486→          <button
+   487→   487→            onClick={handleConfirm}
+   488→   488→            disabled={loading}
+   489→   489→            className="flex-1 bg-navy-700 hover:bg-navy-800 text-white px-4 py-2.5 rounded-full text-sm font-semibold transition-all disabled:opacity-50"
+   490→   490→          >
+   491→   491→            {loading ? 'Finishing…' : 'Yes, finish it'}
+   492→   492→          </button>
+   493→   493→        </div>
+   494→   494→      </div>
+   495→   495→    </div>
+   496→   496→  )
+   497→   497→}
+   498→   498→
+   499→   499→// ── Completed Media section (unified) ─────────────────────────────────────────
+   500→   500→
+   501→   501→function typeEmoji(type: Book['type']): string {
+   502→   502→  if (type === 'article') return '📰'
+   503→   503→  if (type === 'podcast') return '🎙️'
+   504→   504→  return '📚'
+   505→   505→}
+   506→   506→
+   507→   507→function CompletedMediaSection({
+   508→   508→  books,
+   509→   509→  articles,
+   510→   510→  podcasts,
+   511→   511→  onOpenDetail,
+   512→   512→}: {
+   513→   513→  books: Book[]
+   514→   514→  articles: Book[]
+   515→   515→  podcasts: Book[]
+   516→   516→  onOpenDetail: (book: Book) => void
+   517→   517→}) {
+   518→   518→  const router = useRouter()
+   519→   519→
+   520→   520→  function sortRecent(items: Book[]) {
+   521→   521→    return [...items].sort((a, b) =>
+   522→   522→      (b.date_finished ?? b.created_at ?? '').localeCompare(a.date_finished ?? a.created_at ?? '')
+   523→   523→    )
+   524→   524→  }
+   525→   525→
+   526→   526→  const recentBooks = sortRecent(books).slice(0, 2)
+   527→   527→  const recentArticles = sortRecent(articles).slice(0, 2)
+   528→   528→  const recentPodcasts = sortRecent(podcasts).slice(0, 2)
+   529→   529→  const combined = [...recentBooks, ...recentArticles, ...recentPodcasts]
+   530→   530→
+   531→   531→  if (combined.length === 0) return null
+   532→   532→
+   533→   533→  return (
+   534→   534→    <section>
+   535→   535→      <h2 className="text-[11px] font-bold uppercase tracking-widest text-[#cc5500] mb-3">
+   536→   536→        Complete
+   537→   537→      </h2>
+   538→   538→      <div className="space-y-1.5">
+   539→   539→        {combined.map(book => (
+   540→   540→          <button
+   541→   541→            key={book.id}
+   542→   542→            onClick={() => onOpenDetail(book)}
+   543→   543→            className="w-full text-left bg-white rounded-xl border border-fog-300 shadow-sm px-4 py-3 flex items-center gap-3 hover:border-fog-400 hover:shadow-md transition-all group"
+   544→   544→          >
+   545→   545→            <div className="flex-1 min-w-0">
+   546→   546→              <p className="text-sm font-medium text-navy-800 truncate group-hover:text-navy-900">
+   547→   547→                {typeEmoji(book.type)} {book.title}
+   548→   548→              </p>
+   549→   549→              {book.author && (
+   550→   550→                <p className="text-xs text-fog-400 mt-0.5 truncate">{book.author}</p>
+   551→   551→              )}
+   552→   552→            </div>
+   553→   553→            {book.date_finished && (
+   554→   554→              <span className="text-xs text-fog-400 shrink-0">
+   555→   555→                {format(parseISO(book.date_finished), 'MMM d, yyyy')}
+   556→   556→              </span>
+   557→   557→            )}
+   558→   558→            <span className="text-xs text-ember-600 font-medium shrink-0">✓</span>
+   559→   559→          </button>
+   560→   560→        ))}
+   561→   561→
+   562→   562→        <button
+   563→   563→          onClick={() => router.push('/completed')}
+   564→   564→          className="w-full text-center text-xs text-fog-500 hover:text-navy-700 bg-white border border-fog-300 hover:border-fog-400 rounded-xl py-2.5 mt-1 transition-all font-medium"
+   565→   565→        >
+   566→   566→          View All →
+   567→   567→        </button>
+   568→   568→      </div>
+   569→   569→    </section>
+   570→   570→  )
+   571→   571→}
+   572→   572→
+   573→   573→// ── Section header ─────────────────────────────────────────────────────────────
+   574→   574→
+   575→   575→function SectionHeader({ children }: { children: React.ReactNode }) {
+   576→   576→  return (
+   577→   577→    <h2 className="text-[11px] font-bold uppercase tracking-widest text-[#cc5500] mb-3">
+   578→   578→      {children}
+   579→   579→    </h2>
+   580→   580→  )
+   581→   581→}
+   582→   582→
+   583→   583→// ── Dashboard content (uses useSearchParams) ───────────────────────────────────
+   584→   584→
+   585→   585→function DashboardContent() {
+   586→   586→  const router = useRouter()
+   587→   587→  const searchParams = useSearchParams()
+   588→   588→  const { user, signOut } = useAuth()
+   589→   589→
+   590→   590→  const [books, setBooks] = useState<Book[]>([])
+   591→   591→  const [recentRefreshKey, setRecentRefreshKey] = useState(0)
+   592→   592→  const [loading, setLoading] = useState(true)
+   593→   593→  const [nextUpExpanded, setNextUpExpanded] = useState(false)
+   594→   594→  const [activeDragBookId, setActiveDragBookId] = useState<string | null>(null)
+   595→   595→  const [showAddItem, setShowAddItem] = useState(false)
+   596→   596→  const [showSearch, setShowSearch] = useState(false)
+   597→   597→  const [folderFilter, setFolderFilter] = useState<string | null>(null)
+   598→   598→  const [showFolderMenu, setShowFolderMenu] = useState(false)
+   599→   599→  const [creatingFolder, setCreatingFolder] = useState(false)
+   600→   600→  const [newFolderName, setNewFolderName] = useState('')
+   601→   601→  const folderMenuRef = useRef<HTMLDivElement>(null)
+   602→   602→  const folderInputRef = useRef<HTMLInputElement>(null)
+   603→   603→  const [completeBookTarget, setCompleteBookTarget] = useState<Book | null>(null)
+   604→   604→  const [isPro, setIsPro] = useState(true) // optimistic: avoids flash of disabled state
+   605→   605→
+   606→   606→  // Detail modal via URL params
+   607→   607→  const detailBookId = searchParams.get('book')
+   608→   608→  const detailTabParam = searchParams.get('tab') ?? 'outline'
+   609→   609→  const detailTab = (['outline', 'brainstorm', 'quotes'].includes(detailTabParam)
+   610→   610→    ? detailTabParam
+   611→   611→    : 'outline') as 'outline' | 'brainstorm' | 'quotes'
+   612→   612→
+   613→   613→  function openDetail(bookId: string, tab = 'outline') {
+   614→   614→    if (user) {
+   615→   615→      const book = books.find(b => b.id === bookId)
+   616→   616→      if (book) {
+   617→   617→        trackRecentlyViewed(user.id, { id: bookId, title: book.title, type: book.type })
+   618→   618→        setRecentRefreshKey(k => k + 1)
+   619→   619→      }
+   620→   620→    }
+   621→   621→    router.push(`/home?book=${bookId}&tab=${tab}`, { scroll: false })
+   622→   622→  }
+   623→   623→
+   624→   624→  function closeDetail() {
+   625→   625→    router.push('/home', { scroll: false })
+   626→   626→  }
+   627→   627→
+   628→   628→  const refresh = useCallback(async () => {
+   629→   629→    try {
+   630→   630→      const { data, error } = await supabase
+   631→   631→        .from('books')
+   632→   632→        .select('*')
+   633→   633→        .order('sort_order', { ascending: true, nullsFirst: false })
+   634→   634→        .order('created_at', { ascending: false })
+   635→   635→      if (error) throw error
+   636→   636→      const bookList = (data as Book[]) ?? []
+   637→   637→      cacheBooks(bookList)
+   638→   638→      setBooks(bookList)
+   639→   639→    } catch {
+   640→   640→      // Offline: show cached books merged with any locally-queued creates
+   641→   641→      const cached = getCachedBooks()
+   642→   642→      const pending = await getPendingBooks()
+   643→   643→      const cachedIds = new Set(cached.map((b) => b.id))
+   644→   644→      const newPending = pending.filter((p) => !cachedIds.has(p.id))
+   645→   645→      setBooks([...newPending, ...cached])
+   646→   646→    }
+   647→   647→    setLoading(false)
+   648→   648→  }, [])
+   649→   649→
+   650→   650→  useEffect(() => {
+   651→   651→    refresh()
+   652→   652→    // Check subscription status so we can enforce the free-tier limit
+   653→   653→    supabase.auth.getUser().then(async ({ data: { user } }) => {
+   654→   654→      if (!user) return
+   655→   655→      const { data } = await supabase
+   656→   656→        .from('profiles')
+   657→   657→        .select('subscription_status, is_comped')
+   658→   658→        .eq('id', user.id)
+   659→   659→        .single()
+   660→   660→      setIsPro(data?.subscription_status === 'pro' || data?.is_comped === true)
+   661→   661→    })
+   662→   662→  }, [refresh])
+   663→   663→
+   664→   664→  // When connectivity is restored: drain the sync queue, then re-fetch
+   665→   665→  useEffect(() => {
+   666→   666→    async function handleOnline() {
+   667→   667→      await processQueue()
+   668→   668→      await refresh()
+   669→   669→      window.dispatchEvent(new Event('mindwell-queue-updated'))
+   670→   670→    }
+   671→   671→    window.addEventListener('online', handleOnline)
+   672→   672→    // Also respond to the PWAProvider's post-sync event
+   673→   673→    window.addEventListener('mindwell-synced', refresh)
+   674→   674→    return () => {
+   675→   675→      window.removeEventListener('online', handleOnline)
+   676→   676→      window.removeEventListener('mindwell-synced', refresh)
+   677→   677→    }
+   678→   678→  }, [refresh])
+   679→   679→
+   680→   680→  // Cmd+K / Ctrl+K → open search
+   681→   681→  useEffect(() => {
+   682→   682→    function onKey(e: KeyboardEvent) {
+   683→   683→      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+   684→   684→        e.preventDefault()
+   685→   685→        setShowSearch(s => !s)
+   686→   686→      }
+   687→   687→    }
+   688→   688→    window.addEventListener('keydown', onKey)
+   689→   689→    return () => window.removeEventListener('keydown', onKey)
+   690→   690→  }, [])
+   691→   691→
+   692→   692→  // Close folder menu on outside click / Escape
+   693→   693→  useEffect(() => {
+   694→   694→    if (!showFolderMenu) return
+   695→   695→    function handleClick(e: MouseEvent) {
+   696→   696→      if (folderMenuRef.current && !folderMenuRef.current.contains(e.target as Node)) {
+   697→   697→        setShowFolderMenu(false)
+   698→   698→        setCreatingFolder(false)
+   699→   699→        setNewFolderName('')
+   700→   700→      }
+   701→   701→    }
+   702→   702→    function handleKey(e: KeyboardEvent) {
+   703→   703→      if (e.key === 'Escape') {
+   704→   704→        setShowFolderMenu(false)
+   705→   705→        setCreatingFolder(false)
+   706→   706→        setNewFolderName('')
+   707→   707→      }
+   708→   708→    }
+   709→   709→    document.addEventListener('pointerdown', handleClick)
+   710→   710→    document.addEventListener('keydown', handleKey)
+   711→   711→    return () => {
+   712→   712→      document.removeEventListener('pointerdown', handleClick)
+   713→   713→      document.removeEventListener('keydown', handleKey)
+   714→   714→    }
+   715→   715→  }, [showFolderMenu])
+   716→   716→
+   717→   717→  useEffect(() => {
+   718→   718→    if (creatingFolder) folderInputRef.current?.focus()
+   719→   719→  }, [creatingFolder])
+   720→   720→
+   721→   721→  const allFolders = Array.from(
+   722→   722→    new Set(books.map(b => b.folder_name).filter((f): f is string => !!f))
+   723→   723→  ).sort((a, b) => a.localeCompare(b))
+   724→   724→
+   725→   725→  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
+   726→   726→
+   727→   727→  // Free-tier limit: count all non-completed items (active + queued + paused)
+   728→   728→  const activeItemCount = books.filter(b => b.status !== 'completed').length
+   729→   729→  const upgradeRequired = !isPro && activeItemCount >= 3
+   730→   730→
+   731→   731→  const filtered = folderFilter
+   732→   732→    ? books.filter(b => b.folder_name === folderFilter)
+   733→   733→    : books
+   734→   734→
+   735→   735→  const readingNow = filtered.filter(b => b.status === 'active' && b.type === 'book')
+   736→   736→  const nextUp = filtered.filter(b => (b.status === 'queued' || b.status === 'paused') && b.type === 'book')
+   737→   737→  const activeArticles = filtered.filter(b => b.status === 'active' && b.type === 'article')
+   738→   738→  const activePodcasts = filtered.filter(b => b.status === 'active' && b.type === 'podcast')
+   739→   739→  const completedBooks = filtered.filter(b => b.status === 'completed' && b.type === 'book')
+   740→   740→  const completedArticles = filtered.filter(b => b.status === 'completed' && b.type === 'article')
+   741→   741→  const completedPodcasts = filtered.filter(b => b.status === 'completed' && b.type === 'podcast')
+   742→   742→
+   743→   743→  const activeDragBook = activeDragBookId
+   744→   744→    ? books.find(b => b.id === activeDragBookId) ?? null
+   745→   745→    : null
+   746→   746→
+   747→   747→  const allReadingNow = books.filter(b => b.status === 'active' && b.type === 'book')
+   748→   748→
+   749→   749→  async function handleMoveUp(book: Book) {
+   750→   750→    if (allReadingNow.length >= 10) return
+   751→   751→    setBooks(prev => prev.map(b =>
+   752→   752→      b.id === book.id ? { ...b, status: 'active' } : b
+   753→   753→    ))
+   754→   754→    await fetch(`/api/books/${book.id}`, {
+   755→   755→      method: 'PATCH',
+   756→   756→      headers: { 'Content-Type': 'application/json' },
+   757→   757→      body: JSON.stringify({ status: 'active' }),
+   758→   758→    })
+   759→   759→  }
+   760→   760→
+   761→   761→  function handleDragStart(event: DragStartEvent) {
+   762→   762→    setActiveDragBookId(event.active.id as string)
+   763→   763→    setNextUpExpanded(true)
+   764→   764→  }
+   765→   765→
+   766→   766→  async function handleDragEnd(event: DragEndEvent) {
+   767→   767→    const { active, over } = event
+   768→   768→    setActiveDragBookId(null)
+   769→   769→    if (!over) return
+   770→   770→
+   771→   771→    const activeId = active.id as string
+   772→   772→    const overId = over.id as string
+   773→   773→    if (activeId === overId) return
+   774→   774→
+   775→   775→    const inReading = readingNow.some(b => b.id === activeId)
+   776→   776→    const inQueue = nextUp.some(b => b.id === activeId)
+   777→   777→
+   778→   778→    const overIsReadingSection = overId === READING_SECTION
+   779→   779→    const overIsQueueSection = overId === QUEUE_SECTION
+   780→   780→    const overInReading = readingNow.some(b => b.id === overId)
+   781→   781→    const overInQueue = nextUp.some(b => b.id === overId)
+   782→   782→
+   783→   783→    let destSection: 'reading' | 'queue' | null = null
+   784→   784→    if (overIsReadingSection || overInReading) destSection = 'reading'
+   785→   785→    else if (overIsQueueSection || overInQueue) destSection = 'queue'
+   786→   786→    if (!destSection) return
+   787→   787→
+   788→   788→    const sourceSection = inReading ? 'reading' : inQueue ? 'queue' : null
+   789→   789→    if (!sourceSection) return
+   790→   790→
+   791→   791→    if (sourceSection === destSection) {
+   792→   792→      const list = sourceSection === 'reading' ? readingNow : nextUp
+   793→   793→      const oldIndex = list.findIndex(b => b.id === activeId)
+   794→   794→      const newIndex = (overIsReadingSection || overIsQueueSection)
+   795→   795→        ? list.length - 1
+   796→   796→        : list.findIndex(b => b.id === overId)
+   797→   797→      if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return
+   798→   798→
+   799→   799→      const reordered = arrayMove(list, oldIndex, newIndex)
+   800→   800→      setBooks(prev => {
+   801→   801→        const others = prev.filter(b => !list.some(l => l.id === b.id))
+   802→   802→        return [...others, ...reordered.map((b, i) => ({ ...b, sort_order: i + 1 }))]
+   803→   803→      })
+   804→   804→      await fetch('/api/books/reorder', {
+   805→   805→        method: 'PATCH',
+   806→   806→        headers: { 'Content-Type': 'application/json' },
+   807→   807→        body: JSON.stringify({ orderedIds: reordered.map(b => b.id) }),
+   808→   808→      })
+   809→   809→      await refresh()
+   810→   810→    } else {
+   811→   811→      if (destSection === 'reading' && allReadingNow.length >= 10) return
+   812→   812→      const originalStatus = books.find(b => b.id === activeId)?.status
+   813→   813→      const newStatus = destSection === 'reading' ? 'active' : 'queued'
+   814→   814→
+   815→   815→      setBooks(prev => prev.map(b =>
+   816→   816→        b.id === activeId ? { ...b, status: newStatus } : b
+   817→   817→      ))
+   818→   818→
+   819→   819→      const res = await fetch(`/api/books/${activeId}`, {
+   820→   820→        method: 'PATCH',
+   821→   821→        headers: { 'Content-Type': 'application/json' },
+   822→   822→        body: JSON.stringify({ status: newStatus }),
+   823→   823→      })
+   824→   824→      if (!res.ok && originalStatus) {
+   825→   825→        setBooks(prev => prev.map(b =>
+   826→   826→          b.id === activeId ? { ...b, status: originalStatus } : b
+   827→   827→        ))
+   828→   828→      }
+   829→   829→    }
+   830→   830→  }
+   831→   831→
+   832→   832→  async function handleCompleteBook(book: Book) {
+   833→   833→    await fetch(`/api/books/${book.id}/complete`, { method: 'POST' })
+   834→   834→    setCompleteBookTarget(null)
+   835→   835→    await refresh()
+   836→   836→  }
+   837→   837→
+   838→   838→  async function handleAssignFolder(bookId: string, folderName: string | null) {
+   839→   839→    setBooks(prev => prev.map(b => b.id === bookId ? { ...b, folder_name: folderName } : b))
+   840→   840→    await fetch(`/api/books/${bookId}`, {
+   841→   841→      method: 'PATCH',
+   842→   842→      headers: { 'Content-Type': 'application/json' },
+   843→   843→      body: JSON.stringify({ folder_name: folderName }),
+   844→   844→    })
+   845→   845→  }
+   846→   846→
+   847→   847→  async function handleCompleteNonBook(book: Book) {
+   848→   848→    const today = new Date().toISOString().split('T')[0]
+   849→   849→    await fetch(`/api/books/${book.id}`, {
+   850→   850→      method: 'PATCH',
+   851→   851→      headers: { 'Content-Type': 'application/json' },
+   852→   852→      body: JSON.stringify({ status: 'completed', date_finished: today }),
+   853→   853→    })
+   854→   854→    await refresh()
+   855→   855→  }
+   856→   856→
+   857→   857→  if (loading) {
+   858→   858→    return (
+   859→   859→      <div className="min-h-screen bg-fog-200 flex items-center justify-center text-fog-500 text-sm">
+   860→   860→        Loading…
+   861→   861→      </div>
+   862→   862→    )
+   863→   863→  }
+   864→   864→
+   865→   865→  return (
+   866→   866→    <div className="min-h-screen bg-fog-200">
+   867→   867→      {/* Header */}
+   868→   868→      <header className="bg-white/80 border-b border-fog-300 sticky top-0 z-10 backdrop-blur-xl">
+   869→   869→        <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
+   870→   870→          <h1 className="text-2xl font-bold tracking-tight" style={{ color: '#191970' }}>MindWell</h1>
+   871→   871→          <div className="flex items-center gap-2">
+   872→   872→            {user && (
+   873→   873→              <RecentlyViewedDropdown
+   874→   874→                userId={user.id}
+   875→   875→                onOpen={id => openDetail(id)}
+   876→   876→                refreshKey={recentRefreshKey}
+   877→   877→              />
+   878→   878→            )}
+   879→   879→            <button
+   880→   880→              onClick={() => setShowSearch(true)}
+   881→   881→              className="text-fog-600 hover:text-navy-700 px-3 py-1.5 rounded-full bg-fog-100 hover:bg-fog-200 text-sm flex items-center gap-2 transition-all"
+   882→   882→              title="Search (⌘K)"
+   883→   883→            >
+   884→   884→              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+   885→   885→                <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11ZM2 9a7 7 0 1 1 12.452 4.391l3.328 3.329a.75.75 0 1 1-1.06 1.06l-3.329-3.328A7 7 0 0 1 2 9Z" clipRule="evenodd" />
+   886→   886→              </svg>
+   887→   887→              <span className="hidden sm:inline">Search</span>
+   888→   888→              <kbd className="hidden sm:inline text-[10px] font-mono bg-fog-200 text-fog-500 px-1.5 py-0.5 rounded border border-fog-300">⌘K</kbd>
+   889→   889→            </button>
+   890→   890→            {/* Folders dropdown */}
+   891→   891→            <div ref={folderMenuRef} className="relative">
+   892→   892→              <button
+   893→   893→                onClick={() => setShowFolderMenu(o => !o)}
+   894→   894→                className={`px-3 py-1.5 rounded-full text-sm flex items-center gap-1.5 transition-all ${
+   895→   895→                  folderFilter
+   896→   896→                    ? 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'
+   897→   897→                    : 'text-fog-600 hover:text-navy-700 bg-fog-100 hover:bg-fog-200'
+   898→   898→                }`}
+   899→   899→                title="Filter by folder"
+   900→   900→              >
+   901→   901→                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+   902→   902→                  <path d="M3.75 3A1.75 1.75 0 0 0 2 4.75v3.26a3.235 3.235 0 0 1 1.75-.51h12.5c.644 0 1.245.188 1.75.51V6.75A1.75 1.75 0 0 0 16.25 5h-4.836a.25.25 0 0 1-.177-.073L9.823 3.513A1.75 1.75 0 0 0 8.586 3H3.75ZM3.75 9A1.75 1.75 0 0 0 2 10.75v4.5c0 .966.784 1.75 1.75 1.75h12.5A1.75 1.75 0 0 0 18 15.25v-4.5A1.75 1.75 0 0 0 16.25 9H3.75Z" />
+   903→   903→                </svg>
+   904→   904→                {folderFilter ? (
+   905→   905→                  <>
+   906→   906→                    <span className="hidden sm:inline max-w-[100px] truncate">{folderFilter}</span>
+   907→   907→                    <button
+   908→   908→                      onClick={e => { e.stopPropagation(); setFolderFilter(null) }}
+   909→   909→                      className="text-amber-400 hover:text-amber-700 transition-colors leading-none"
+   910→   910→                      aria-label="Clear folder filter"
+   911→   911→                    >
+   912→   912→                      ×
+   913→   913→                    </button>
+   914→   914→                  </>
+   915→   915→                ) : (
+   916→   916→                  <span className="hidden sm:inline">Folders</span>
+   917→   917→                )}
+   918→   918→              </button>
+   919→   919→
+   920→   920→              {showFolderMenu && (
+   921→   921→                <div className="absolute right-0 top-full mt-1 w-52 bg-white rounded-xl border border-fog-300 shadow-lg z-50 py-1 overflow-hidden">
+   922→   922→                  {/* All */}
+   923→   923→                  <button
+   924→   924→                    onClick={() => { setFolderFilter(null); setShowFolderMenu(false) }}
+   925→   925→                    className={`w-full text-left px-3 py-2 text-sm hover:bg-fog-100 transition-colors ${
+   926→   926→                      !folderFilter ? 'text-navy-900 font-medium' : 'text-navy-700'
+   927→   927→                    }`}
+   928→   928→                  >
+   929→   929→                    All
+   930→   930→                  </button>
+   931→   931→                  {allFolders.length > 0 && <div className="border-t border-fog-200 my-1" />}
+   932→   932→                  {allFolders.map(folder => (
+   933→   933→                    <button
+   934→   934→                      key={folder}
+   935→   935→                      onClick={() => { setFolderFilter(folder); setShowFolderMenu(false) }}
+   936→   936→                      className={`w-full text-left px-3 py-2 text-sm hover:bg-fog-100 transition-colors truncate ${
+   937→   937→                        folderFilter === folder ? 'text-amber-700 font-medium' : 'text-navy-800'
+   938→   938→                      }`}
+   939→   939→                    >
+   940→   940→                      {folder}
+   941→   941→                    </button>
+   942→   942→                  ))}
+   943→   943→                  <div className="border-t border-fog-200 my-1" />
+   944→   944→                  {creatingFolder ? (
+   945→   945→                    <div className="px-3 py-2 flex items-center gap-1.5">
+   946→   946→                      <input
+   947→   947→                        ref={folderInputRef}
+   948→   948→                        type="text"
+   949→   949→                        value={newFolderName}
+   950→   950→                        onChange={e => setNewFolderName(e.target.value)}
+   951→   951→                        onKeyDown={e => {
+   952→   952→                          if (e.key === 'Enter' && newFolderName.trim()) {
+   953→   953→                            setFolderFilter(newFolderName.trim())
+   954→   954→                            setShowFolderMenu(false)
+   955→   955→                            setCreatingFolder(false)
+   956→   956→                            setNewFolderName('')
+   957→   957→                          }
+   958→   958→                        }}
+   959→   959→                        placeholder="Folder name"
+   960→   960→                        className="flex-1 min-w-0 text-sm px-2 py-1 rounded-lg border border-fog-300 focus:border-navy-400 focus:outline-none"
+   961→   961→                      />
+   962→   962→                      <button
+   963→   963→                        onClick={() => {
+   964→   964→                          if (!newFolderName.trim()) return
+   965→   965→                          setFolderFilter(newFolderName.trim())
+   966→   966→                          setShowFolderMenu(false)
+   967→   967→                          setCreatingFolder(false)
+   968→   968→                          setNewFolderName('')
+   969→   969→                        }}
+   970→   970→                        disabled={!newFolderName.trim()}
+   971→   971→                        className="text-xs font-medium text-navy-700 hover:text-navy-900 px-2 py-1 rounded-lg hover:bg-fog-100 transition-all disabled:opacity-30"
+   972→   972→                      >
+   973→   973→                        Go
+   974→   974→                      </button>
+   975→   975→                    </div>
+   976→   976→                  ) : (
+   977→   977→                    <button
+   978→   978→                      onClick={() => setCreatingFolder(true)}
+   979→   979→                      className="w-full text-left px-3 py-2 text-sm text-navy-700 hover:bg-fog-100 transition-colors"
+   980→   980→                    >
+   981→   981→                      New folder…
+   982→   982→                    </button>
+   983→   983→                  )}
+   984→   984→                </div>
+   985→   985→              )}
+   986→   986→            </div>
+   987→   987→            <div className="flex items-center gap-1.5">
+   988→   988→              {upgradeRequired && (
+   989→   989→                <a
+   990→   990→                  href="/pricing"
+   991→   991→                  className="text-xs text-ember-600 hover:text-ember-700 font-medium transition-colors hidden sm:inline"
+   992→   992→                >
+   993→   993→                  Upgrade for more
+   994→   994→                </a>
+   995→   995→              )}
+   996→   996→              <button
+   997→   997→                onClick={() => upgradeRequired ? router.push('/pricing') : setShowAddItem(true)}
+   998→   998→                className={`w-9 h-9 flex items-center justify-center rounded-full text-xl font-light transition-all leading-none ${
+   999→   999→                  upgradeRequired
+  1000→  1000→                    ? 'bg-fog-300 text-fog-500'
+  1001→  1001→                    : 'bg-navy-700 hover:bg-navy-800 text-white'
+  1002→  1002→                }`}
+  1003→  1003→                title={upgradeRequired ? 'Upgrade to add more items' : 'Add book, article, or podcast'}
+  1004→  1004→              >
+  1005→  1005→                {upgradeRequired ? '🔒' : '+'}
+  1006→  1006→              </button>
+  1007→  1007→            </div>
+  1008→  1008→            <button
+  1009→  1009→              onClick={signOut}
+  1010→  1010→              className="text-fog-500 hover:text-navy-700 px-2 py-1.5 rounded-full hover:bg-fog-100 text-xs transition-all"
+  1011→  1011→              title="Sign out"
+  1012→  1012→            >
+  1013→  1013→              Sign out
+  1014→  1014→            </button>
+  1015→  1015→          </div>
+  1016→  1016→        </div>
+  1017→  1017→      </header>
+  1018→  1018→
+  1019→  1019→      <main className="max-w-4xl mx-auto px-6 py-8 space-y-8">
+  1020→  1020→        <DndContext
+  1021→  1021→          sensors={sensors}
+  1022→  1022→          collisionDetection={closestCenter}
+  1023→  1023→          onDragStart={handleDragStart}
+  1024→  1024→          onDragEnd={handleDragEnd}
+  1025→  1025→        >
+  1026→  1026→
+  1027→  1027→          {/* ── Reading Now ── */}
+  1028→  1028→          <section>
+  1029→  1029→            <SectionHeader>📚 Reading Now</SectionHeader>
+  1030→  1030→            <DroppableSection id={READING_SECTION}>
+  1031→  1031→              {readingNow.length === 0 ? (
+  1032→  1032→                <div className="text-center py-12 text-fog-400 bg-white rounded-xl border border-dashed border-fog-300">
+  1033→  1033→                  <p className="text-sm mb-3">Nothing here yet</p>
+  1034→  1034→                  <button
+  1035→  1035→                    onClick={() => setShowAddItem(true)}
+  1036→  1036→                    className="text-sm text-navy-600 hover:text-navy-800 font-medium transition-colors"
+  1037→  1037→                  >
+  1038→  1038→                    Add your first book →
+  1039→  1039→                  </button>
+  1040→  1040→                </div>
+  1041→  1041→              ) : (
+  1042→  1042→                <SortableContext items={readingNow.map(b => b.id)} strategy={verticalListSortingStrategy}>
+  1043→  1043→                  <div className="space-y-2">
+  1044→  1044→                    {readingNow.map(book => (
+  1045→  1045→                      <SortableBookRow
+  1046→  1046→                        key={book.id}
+  1047→  1047→                        book={book}
+  1048→  1048→                        onOpenDetail={() => openDetail(book.id)}
+  1049→  1049→                        onComplete={() => setCompleteBookTarget(book)}
+  1050→  1050→                        allBooks={books}
+  1051→  1051→                        onAssignFolder={handleAssignFolder}
+  1052→  1052→                      />
+  1053→  1053→                    ))}
+  1054→  1054→                  </div>
+  1055→  1055→                </SortableContext>
+  1056→  1056→              )}
+  1057→  1057→            </DroppableSection>
+  1058→  1058→          </section>
+  1059→  1059→
+  1060→  1060→          {/* ── Articles ── */}
+  1061→  1061→          {activeArticles.length > 0 && (
+  1062→  1062→            <section>
+  1063→  1063→              <SectionHeader>📰 Articles</SectionHeader>
+  1064→  1064→              <div className="space-y-2">
+  1065→  1065→                {activeArticles.map(article => (
+  1066→  1066→                  <ArticleCard
+  1067→  1067→                    key={article.id}
+  1068→  1068→                    book={article}
+  1069→  1069→                    onOpenDetail={() => openDetail(article.id)}
+  1070→  1070→                    onDone={() => handleCompleteNonBook(article)}
+  1071→  1071→                    allBooks={books}
+  1072→  1072→                    onAssignFolder={handleAssignFolder}
+  1073→  1073→                  />
+  1074→  1074→                ))}
+  1075→  1075→              </div>
+  1076→  1076→            </section>
+  1077→  1077→          )}
+  1078→  1078→
+  1079→  1079→          {/* ── Podcasts ── */}
+  1080→  1080→          {activePodcasts.length > 0 && (
+  1081→  1081→            <section>
+  1082→  1082→              <SectionHeader>🎙️ Podcasts</SectionHeader>
+  1083→  1083→              <div className="space-y-2">
+  1084→  1084→                {activePodcasts.map(podcast => (
+  1085→  1085→                  <PodcastCard
+  1086→  1086→                    key={podcast.id}
+  1087→  1087→                    book={podcast}
+  1088→  1088→                    onOpenDetail={() => openDetail(podcast.id)}
+  1089→  1089→                    onDone={() => handleCompleteNonBook(podcast)}
+  1090→  1090→                    allBooks={books}
+  1091→  1091→                    onAssignFolder={handleAssignFolder}
+  1092→  1092→                  />
+  1093→  1093→                ))}
+  1094→  1094→              </div>
+  1095→  1095→            </section>
+  1096→  1096→          )}
+  1097→  1097→
+  1098→  1098→          {/* ── Next Up ── */}
+  1099→  1099→          <section>
+  1100→  1100→            <DroppableSection id={QUEUE_SECTION}>
+  1101→  1101→              <button
+  1102→  1102→                onClick={() => setNextUpExpanded(e => !e)}
+  1103→  1103→                className="flex items-center gap-2 mb-3 group"
+  1104→  1104→              >
+  1105→  1105→                <h2 className="text-[11px] font-bold uppercase tracking-widest text-[#cc5500] group-hover:text-[#b84a00] transition-colors">
+  1106→  1106→                  Next Up
+  1107→  1107→                </h2>
+  1108→  1108→                <span className="text-fog-400 text-xs group-hover:text-fog-600 transition-colors">
+  1109→  1109→                  {nextUp.length > 0 ? `(${nextUp.length}) ` : ''}{nextUpExpanded ? '▾' : '▸'}
+  1110→  1110→                </span>
+  1111→  1111→              </button>
+  1112→  1112→
+  1113→  1113→              {nextUpExpanded && (
+  1114→  1114→                nextUp.length === 0 ? (
+  1115→  1115→                  <div className="text-center py-8 text-fog-400 bg-white rounded-xl border border-dashed border-fog-300 text-sm">
+  1116→  1116→                    Drag books here from Reading Now
+  1117→  1117→                  </div>
+  1118→  1118→                ) : (
+  1119→  1119→                  <SortableContext items={nextUp.map(b => b.id)} strategy={verticalListSortingStrategy}>
+  1120→  1120→                    <div className="space-y-2">
+  1121→  1121→                      {nextUp.map(book => (
+  1122→  1122→                        <SortableBookRow
+  1123→  1123→                          key={book.id}
+  1124→  1124→                          book={book}
+  1125→  1125→                          onOpenDetail={() => openDetail(book.id)}
+  1126→  1126→                          onComplete={() => setCompleteBookTarget(book)}
+  1127→  1127→                          onMoveUp={() => handleMoveUp(book)}
+  1128→  1128→                          showEmoji
+  1129→  1129→                          allBooks={books}
+  1130→  1130→                          onAssignFolder={handleAssignFolder}
+  1131→  1131→                        />
+  1132→  1132→                      ))}
+  1133→  1133→                    </div>
+  1134→  1134→                  </SortableContext>
+  1135→  1135→                )
+  1136→  1136→              )}
+  1137→  1137→            </DroppableSection>
+  1138→  1138→          </section>
+  1139→  1139→
+  1140→  1140→          <DragOverlay dropAnimation={null}>
+  1141→  1141→            {activeDragBook && <BookDragOverlay book={activeDragBook} />}
+  1142→  1142→          </DragOverlay>
+  1143→  1143→        </DndContext>
+  1144→  1144→
+  1145→  1145→        {/* ── Completed Media ── */}
+  1146→  1146→        <CompletedMediaSection
+  1147→  1147→          books={completedBooks}
+  1148→  1148→          articles={completedArticles}
+  1149→  1149→          podcasts={completedPodcasts}
+  1150→  1150→          onOpenDetail={book => openDetail(book.id)}
+  1151→  1151→        />
+  1152→  1152→      </main>
+  1153→  1153→
+  1154→  1154→      {/* Modals */}
+  1155→  1155→      {showAddItem && (
+  1156→  1156→        <AddItemModal
+  1157→  1157→          onClose={() => setShowAddItem(false)}
+  1158→  1158→          onSuccess={refresh}
+  1159→  1159→          upgradeRequired={upgradeRequired}
+  1160→  1160→        />
+  1161→  1161→      )}
+  1162→  1162→
+  1163→  1163→      {completeBookTarget && (
+  1164→  1164→        <ConfirmCompleteModal
+  1165→  1165→          book={completeBookTarget}
+  1166→  1166→          onClose={() => setCompleteBookTarget(null)}
+  1167→  1167→          onConfirm={() => handleCompleteBook(completeBookTarget)}
+  1168→  1168→        />
+  1169→  1169→      )}
+  1170→  1170→
+  1171→  1171→      {detailBookId && (
+  1172→  1172→        <DetailModal
+  1173→  1173→          bookId={detailBookId}
+  1174→  1174→          initialTab={detailTab}
+  1175→  1175→          onClose={closeDetail}
+  1176→  1176→          onDelete={() => { closeDetail(); refresh() }}
+  1177→  1177→          onUpdate={refresh}
+  1178→  1178→        />
+  1179→  1179→      )}
+  1180→  1180→
+  1181→  1181→      {showSearch && <GlobalSearch onClose={() => setShowSearch(false)} />}
+  1182→  1182→    </div>
+  1183→  1183→  )
+  1184→  1184→}
+  1185→  1185→
+  1186→  1186→// ── Default export wrapped in Suspense for useSearchParams ─────────────────────
+  1187→  1187→
+  1188→  1188→export default function Dashboard() {
+  1189→  1189→  return (
+  1190→  1190→    <Suspense fallback={
+  1191→  1191→      <div className="min-h-screen bg-fog-200 flex items-center justify-center text-fog-500 text-sm">
+  1192→  1192→        Loading…
+  1193→  1193→      </div>
+  1194→  1194→    }>
+  1195→  1195→      <DashboardContent />
+  1196→  1196→    </Suspense>
+  1197→  1197→  )
+  1198→  1198→}
+  1199→  1199→

@@ -1,0 +1,43 @@
+import { NextRequest } from 'next/server'
+import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { format } from 'date-fns'
+
+/**
+ * POST /api/books/[id]/complete
+ * Marks a book as completed and compacts sort_order for remaining active books.
+ */
+export async function POST(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const supabase = await createSupabaseServerClient()
+  const { id } = await params
+
+  const today = format(new Date(), 'yyyy-MM-dd')
+
+  const { error } = await supabase
+    .from('books')
+    .update({ status: 'completed', date_finished: today })
+    .eq('id', id)
+  if (error) return Response.json({ error: error.message }, { status: 500 })
+
+  // Compact sort_order for remaining active books
+  const { data: activeData } = await supabase
+    .from('books')
+    .select('id, sort_order')
+    .eq('status', 'active')
+    .eq('type', 'book')
+    .order('sort_order', { ascending: true })
+
+  for (let i = 0; i < (activeData ?? []).length; i++) {
+    const b = activeData![i]
+    if (b.sort_order !== i + 1) {
+      await supabase
+        .from('books')
+        .update({ sort_order: i + 1 })
+        .eq('id', b.id)
+    }
+  }
+
+  return Response.json({ success: true })
+}

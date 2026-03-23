@@ -1,0 +1,11 @@
+Here it is:
+
+Remove the scheduling and calendar system entirely — delete the weekly calendar view, sessions, session APIs, and the Primary/Secondary scheduling logic. Books should be a simple draggable list. Keep the progress bar (current page / total pages) on each book card.
+Redesign the main page layout around two sections:
+"Reading Now" — a prominent section at the top that can hold multiple books simultaneously (novels, articles, school reading, anything). No limit on how many can be active.
+"Want to Read" — a collapsed/expandable widget below it. When expanded it looks identical to Reading Now. Books can be dragged between the two sections.
+Each book card should have a simple status toggle to move it between Reading Now and Want to Read.
+Cross-book tag search: A search mode that lets you search by tag and pulls every matching quote across all books, displayed together. Results should be exportable as a PDF.
+Export: Each book's Outline + Scratch + Quotes should be exportable as a clean PDF. The tag search results should also be exportable as a PDF.
+Colors: Replace the current accent colors entirely. Primary interactive elements (buttons, active states, links) should use a bright warm white — around #f5f0e8 or #fafaf8, not pure white. Secondary accent should be soft gold — around #d4a853 or #c9963e, rich and warm. Both should feel elegant against the #121212 background.
+Push to GitHub when done.

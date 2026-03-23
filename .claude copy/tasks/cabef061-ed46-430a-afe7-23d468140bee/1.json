@@ -1,0 +1,9 @@
+{
+  "id": "1",
+  "subject": "Add quote edit functionality",
+  "description": "Add an edit button to each saved quote that allows editing quote text, page number, and tags. Requires building a quote edit modal and quote card component with edit button.",
+  "activeForm": "Adding quote edit functionality",
+  "status": "completed",
+  "blocks": [],
+  "blockedBy": []
+}

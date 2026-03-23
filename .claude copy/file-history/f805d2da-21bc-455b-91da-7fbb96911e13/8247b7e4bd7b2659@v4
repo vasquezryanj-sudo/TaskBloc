@@ -1,0 +1,52 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { createServerClient } from '@supabase/ssr'
+
+export async function GET(request: NextRequest) {
+  const { searchParams, origin } = new URL(request.url)
+  const code = searchParams.get('code')
+  const next = searchParams.get('next') ?? '/home'
+
+  if (!code) {
+    return NextResponse.redirect(`${origin}/login?error=missing_code`)
+  }
+
+  // Build the redirect response first so we can attach Set-Cookie headers to it.
+  // next/headers cookies() does NOT propagate to NextResponse.redirect(), so the
+  // session tokens must be written directly onto this response object.
+  const response = NextResponse.redirect(new URL(next, origin))
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll()
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) =>
+            response.cookies.set(name, value, options)
+          )
+        },
+      },
+    }
+  )
+
+  const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+
+  if (error || !data.user) {
+    return NextResponse.redirect(`${origin}/login?error=auth_failed`)
+  }
+
+  // First sign-in: claim any rows that have no user_id yet
+  const { count } = await supabase
+    .from('books')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', data.user.id)
+
+  if (count === 0) {
+    await supabase.rpc('claim_user_data', { claiming_user_id: data.user.id })
+  }
+
+  return response
+}

@@ -1,0 +1,138 @@
+import Image from 'next/image'
+import Link from 'next/link'
+
+export default function TosPage() {
+  return (
+    <div className="min-h-screen bg-fog-200 flex flex-col items-center px-6 py-12 relative overflow-hidden">
+
+      {/* Background glow */}
+      <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
+        <div
+          className="absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[520px] opacity-40"
+          style={{ background: 'radial-gradient(ellipse at center top, #d5e0ed 0%, transparent 70%)' }}
+        />
+      </div>
+
+      {/* Main content */}
+      <div className="w-full max-w-[640px] relative">
+
+        {/* Header */}
+        <div className="flex flex-col items-center mb-10">
+          <div className="w-14 h-14 rounded-[16px] shadow-md overflow-hidden mb-4 ring-1 ring-navy-200/60">
+            <Image
+              src="/apple-touch-icon.png"
+              alt="MindWell"
+              width={56}
+              height={56}
+              className="w-full h-full object-cover"
+              priority
+            />
+          </div>
+          <Link
+            href="/"
+            className="text-xl font-bold tracking-tight hover:opacity-80 transition-opacity"
+            style={{ color: '#191970' }}
+          >
+            MindWell
+          </Link>
+        </div>
+
+        {/* Card */}
+        <div className="bg-white rounded-3xl border border-fog-300 shadow-xl overflow-hidden">
+          <div className="h-[3px] bg-gradient-to-r from-ember-300 via-ember-400 to-ember-300" />
+
+          <div className="px-8 py-10">
+            <h1 className="text-2xl font-bold text-navy-900 mb-1">Terms of Service</h1>
+            <p className="text-xs text-fog-400 mb-8">Last updated: March 2026</p>
+
+            <p className="text-sm text-fog-600 leading-relaxed mb-8">
+              By using MindWell, you agree to these terms.
+            </p>
+
+            <div className="space-y-7">
+
+              <section>
+                <h2 className="text-sm font-semibold text-navy-800 uppercase tracking-wider mb-2">Use of the app</h2>
+                <p className="text-sm text-fog-600 leading-relaxed">
+                  MindWell is a personal reading and writing tool. You may use it for personal, non-commercial
+                  purposes. You may not use it to store illegal content or attempt to access other users&rsquo; data.
+                </p>
+              </section>
+
+              <div className="border-t border-fog-100" />
+
+              <section>
+                <h2 className="text-sm font-semibold text-navy-800 uppercase tracking-wider mb-2">Your content</h2>
+                <p className="text-sm text-fog-600 leading-relaxed">
+                  You own everything you write in MindWell. We do not claim any rights to your notes, quotes,
+                  or annotations.
+                </p>
+              </section>
+
+              <div className="border-t border-fog-100" />
+
+              <section>
+                <h2 className="text-sm font-semibold text-navy-800 uppercase tracking-wider mb-2">Account</h2>
+                <p className="text-sm text-fog-600 leading-relaxed">
+                  You are responsible for maintaining access to your Google account used to sign in. We are not
+                  liable for any loss of access resulting from changes to your Google account.
+                </p>
+              </section>
+
+              <div className="border-t border-fog-100" />
+
+              <section>
+                <h2 className="text-sm font-semibold text-navy-800 uppercase tracking-wider mb-2">Availability</h2>
+                <p className="text-sm text-fog-600 leading-relaxed">
+                  We do our best to keep MindWell running but do not guarantee uptime or data retention. Back up
+                  anything important.
+                </p>
+              </section>
+
+              <div className="border-t border-fog-100" />
+
+              <section>
+                <h2 className="text-sm font-semibold text-navy-800 uppercase tracking-wider mb-2">Changes</h2>
+                <p className="text-sm text-fog-600 leading-relaxed">
+                  We may update these terms occasionally. Continued use of the app after changes constitutes
+                  acceptance.
+                </p>
+              </section>
+
+              <div className="border-t border-fog-100" />
+
+              <section>
+                <h2 className="text-sm font-semibold text-navy-800 uppercase tracking-wider mb-2">Limitation of liability</h2>
+                <p className="text-sm text-fog-600 leading-relaxed">
+                  MindWell is provided as-is. We are not liable for any damages arising from use of the app.
+                </p>
+              </section>
+
+              <div className="border-t border-fog-100" />
+
+              <section>
+                <h2 className="text-sm font-semibold text-navy-800 uppercase tracking-wider mb-2">Contact</h2>
+                <p className="text-sm text-fog-600 leading-relaxed">
+                  Questions? Reach us at{' '}
+                  <a href="mailto:mindwelladmin@gmail.com" className="text-navy-700 hover:underline">
+                    mindwelladmin@gmail.com
+                  </a>
+                  .
+                </p>
+              </section>
+
+            </div>
+          </div>
+        </div>
+
+        {/* Back link */}
+        <div className="flex justify-center mt-8">
+          <Link href="/" className="text-xs text-fog-400 hover:text-navy-600 transition-colors">
+            ← Back to MindWell
+          </Link>
+        </div>
+
+      </div>
+    </div>
+  )
+}

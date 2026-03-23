@@ -1,0 +1,75 @@
+import { NextRequest } from 'next/server'
+import { supabase } from '@/lib/supabase'
+import { buildAllSchedules } from '@/lib/scheduling'
+import type { Book } from '@/types'
+
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params
+  const { data, error } = await supabase.from('books').select('*').eq('id', id).single()
+  if (error) return Response.json({ error: error.message }, { status: 404 })
+  return Response.json(data)
+}
+
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params
+  const body = await req.json()
+
+  // Apply the update first so subsequent queries reflect the new state
+  const { data: updatedBook, error } = await supabase
+    .from('books')
+    .update(body)
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) return Response.json({ error: error.message }, { status: 500 })
+
+  // When priority changes, rebuild every active book's schedule from scratch.
+  // Priority books claim dates first (sequentially); normal books fill what's left.
+  // Toggling OFF naturally reverts because priority books no longer occupy early slots.
+  if ('is_priority' in body) {
+    const { data: allBooksData } = await supabase
+      .from('books')
+      .select('*')
+      .eq('status', 'active')
+
+    const allBooks = (allBooksData as Book[]) ?? []
+
+    // Wipe all upcoming sessions for every active book
+    if (allBooks.length > 0) {
+      await supabase
+        .from('sessions')
+        .delete()
+        .in('book_id', allBooks.map(b => b.id))
+        .eq('is_completed', false)
+    }
+
+    // Rebuild all schedules respecting the new priority state
+    const allRows = buildAllSchedules(allBooks)
+
+    if (allRows.length > 0) {
+      // Insert in chunks to stay within Supabase row limits
+      const CHUNK = 200
+      for (let i = 0; i < allRows.length; i += CHUNK) {
+        await supabase.from('sessions').insert(allRows.slice(i, i + CHUNK))
+      }
+    }
+  }
+
+  return Response.json(updatedBook)
+}
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params
+  const { error } = await supabase.from('books').delete().eq('id', id)
+  if (error) return Response.json({ error: error.message }, { status: 500 })
+  return new Response(null, { status: 204 })
+}

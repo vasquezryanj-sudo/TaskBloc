@@ -1,0 +1,52 @@
+'use client'
+
+import type { Session, Book } from '@/types'
+
+interface Props {
+  session: Session & { book: Book }
+  onComplete: () => void
+  onEdit: () => void
+}
+
+export default function SessionCard({ session, onComplete, onEdit }: Props) {
+  const { book } = session
+  const pageCount = session.pages_end - session.pages_start + 1
+  const pctBefore = book.total_pages > 0
+    ? Math.round((session.pages_start - 1) / book.total_pages * 100)
+    : 0
+  const pctAfter = book.total_pages > 0
+    ? Math.round(session.pages_end / book.total_pages * 100)
+    : 0
+
+  return (
+    <div className="bg-well-900 rounded-xl px-4 py-3 flex items-center justify-between gap-4 hover:bg-well-800 transition-colors group">
+      <div className="min-w-0">
+        <p className="font-medium text-well-100 truncate">{book.title}</p>
+        <p className="text-sm text-well-500 mt-0.5">
+          pp. {session.pages_start}–{session.pages_end}
+          <span className="mx-1.5">·</span>
+          {pageCount} pages
+          <span className="mx-1.5">·</span>
+          {pctBefore}% → {pctAfter}%
+        </p>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        <button
+          onClick={onEdit}
+          className="text-xs text-well-500 hover:text-well-200 px-2.5 py-1 rounded-md bg-well-800 group-hover:bg-well-700 transition-all"
+        >
+          Edit
+        </button>
+        <button
+          onClick={onComplete}
+          className="w-7 h-7 flex items-center justify-center rounded-full bg-ripple-600 hover:bg-ripple-500 text-white transition-all shadow-[0_0_12px_rgba(79,70,229,0.25)]"
+          title="Mark done"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+            <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  )
+}

@@ -1,0 +1,78 @@
+-- Migration 005: User-scoped RLS + claim function
+-- Run in Supabase SQL editor AFTER configuring Google OAuth in Auth settings.
+-- This migration enforces that every row is owned by an authenticated user.
+
+-- ── 1. Add user_id to quote_headings (missed in migration 004) ────────────────
+ALTER TABLE quote_headings
+  ADD COLUMN IF NOT EXISTS user_id UUID;
+
+CREATE INDEX IF NOT EXISTS idx_quote_headings_user_id ON quote_headings(user_id);
+
+-- ── 2. Drop all existing "allow all" policies ─────────────────────────────────
+DROP POLICY IF EXISTS "allow all"               ON books;
+DROP POLICY IF EXISTS "allow all"               ON sessions;
+DROP POLICY IF EXISTS "allow all"               ON priority_items;
+DROP POLICY IF EXISTS "allow all"               ON book_notes;
+DROP POLICY IF EXISTS "allow all"               ON quotes;
+DROP POLICY IF EXISTS "allow_all_quote_headings" ON quote_headings;
+
+-- ── 3. User-scoped policies ───────────────────────────────────────────────────
+
+-- books
+CREATE POLICY "books_owner" ON books
+  FOR ALL
+  USING  (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+-- quotes
+CREATE POLICY "quotes_owner" ON quotes
+  FOR ALL
+  USING  (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+-- book_notes
+CREATE POLICY "book_notes_owner" ON book_notes
+  FOR ALL
+  USING  (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+-- connections
+CREATE POLICY "connections_owner" ON connections
+  FOR ALL
+  USING  (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+-- quote_headings
+CREATE POLICY "quote_headings_owner" ON quote_headings
+  FOR ALL
+  USING  (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+-- sessions + priority_items are unused by the app; keep open for now
+CREATE POLICY "allow all" ON sessions       FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "allow all" ON priority_items FOR ALL USING (true) WITH CHECK (true);
+
+-- ── 4. Claim function (SECURITY DEFINER bypasses RLS) ────────────────────────
+-- Called once on first sign-in to assign all null-user_id rows to the new user.
+-- Idempotent: if the user already has data (count > 0), this is a no-op.
+
+CREATE OR REPLACE FUNCTION claim_user_data(claiming_user_id UUID)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  -- Only claim if this user has no existing books
+  IF (SELECT COUNT(*) FROM books WHERE user_id = claiming_user_id) = 0 THEN
+    UPDATE books          SET user_id = claiming_user_id WHERE user_id IS NULL;
+    UPDATE quotes         SET user_id = claiming_user_id WHERE user_id IS NULL;
+    UPDATE book_notes     SET user_id = claiming_user_id WHERE user_id IS NULL;
+    UPDATE connections    SET user_id = claiming_user_id WHERE user_id IS NULL;
+    UPDATE quote_headings SET user_id = claiming_user_id WHERE user_id IS NULL;
+  END IF;
+END;
+$$;
+
+-- Allow authenticated users to call this function
+GRANT EXECUTE ON FUNCTION claim_user_data(UUID) TO authenticated;

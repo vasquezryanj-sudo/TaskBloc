@@ -1,0 +1,144 @@
+'use client'
+
+import { useRef, useEffect, useState } from 'react'
+import type { Quote } from '@/types'
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+interface Props {
+  value: string
+  onChange: (value: string) => void
+  className?: string
+  quotes?: Quote[]
+}
+
+interface PopoverState {
+  quoteId: string
+  x: number
+  y: number
+}
+
+// ── Chip styles (inline to avoid Tailwind purge) ──────────────────────────────
+
+const CHIP_STYLE = [
+  'display:inline-flex',
+  'align-items:center',
+  'justify-content:center',
+  'min-width:18px',
+  'height:18px',
+  'padding:0 4px',
+  'border-radius:4px',
+  'background:#fef3c7',
+  'color:#b45309',
+  'border:1px solid #fde68a',
+  'font-size:9px',
+  'font-weight:700',
+  'cursor:pointer',
+  'user-select:none',
+  'margin:0 2px',
+  'vertical-align:middle',
+  'flex-shrink:0',
+  'line-height:1',
+].join(';')
+
+// ── Serialization ─────────────────────────────────────────────────────────────
+
+const QUOTE_RE = /\[quote:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\]/g
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+/**
+ * Convert a [quote:id] serialized string to contenteditable innerHTML.
+ * Newlines → <br>; [quote:uuid] tokens → non-editable Q chip spans.
+ */
+function toHtml(text: string): string {
+  const parts = text.split(QUOTE_RE)
+  let html = ''
+  for (let i = 0; i < parts.length; i++) {
+    if (i % 2 === 0) {
+      html += escapeHtml(parts[i]).replace(/\n/g, '<br>')
+    } else {
+      html += `<span style="${CHIP_STYLE}" contenteditable="false" data-quote-id="${parts[i]}">Q</span>`
+    }
+  }
+  return html
+}
+
+/**
+ * Walk the contenteditable DOM and return the [quote:id] serialized string.
+ * <br> → '\n'; chip spans → [quote:id]; browser-inserted DIVs → '\n' prefix.
+ */
+function toText(root: Node): string {
+  let text = ''
+  for (const node of root.childNodes) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      text += node.textContent ?? ''
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      const el = node as HTMLElement
+      if (el.dataset.quoteId) {
+        text += `[quote:${el.dataset.quoteId}]`
+      } else if (el.tagName === 'BR') {
+        text += '\n'
+      } else if (el.tagName === 'DIV' || el.tagName === 'P') {
+        if (node.previousSibling) text += '\n'
+        text += toText(el)
+      } else {
+        text += toText(el)
+      }
+    }
+  }
+  return text
+}
+
+// ── Cursor offset helpers ─────────────────────────────────────────────────────
+
+/** Serialized character length of a single DOM node. */
+function nodeLen(node: Node): number {
+  if (node.nodeType === Node.TEXT_NODE) return node.textContent?.length ?? 0
+  const el = node as HTMLElement
+  if (el.dataset?.quoteId) return `[quote:${el.dataset.quoteId}]`.length
+  if (el.tagName === 'BR') return 1
+  let n = 0
+  for (const child of el.childNodes) n += nodeLen(child)
+  return n
+}
+
+/**
+ * Return the cursor's position as an offset in the serialized (text) string.
+ * Quote chips count as their full [quote:uuid] token length.
+ */
+function getOffset(div: HTMLElement): number {
+  const sel = window.getSelection()
+  if (!sel || sel.rangeCount === 0) return 0
+  const range = sel.getRangeAt(0)
+
+  if (range.startContainer === div) {
+    let off = 0
+    for (let i = 0; i < range.startOffset; i++) off += nodeLen(div.childNodes[i])
+    return off
+  }
+
+  let offset = 0
+  let found = false
+
+  function walk(node: Node): void {
+    if (found) return
+    if (node === range.startContainer) {
+      offset += range.startOffset
+      found = true
+      return
+    }
+    if (node.nodeType === Node.TEXT_NODE) {
+      offset += node.textContent?.length ?? 0
+    } else {
+      const el = node as HTMLElement
+      if (el.dataset?.quoteId) {
+        offset += `[quote:${el.dataset.quoteId}]`.length
+      } else if (el.tagName === 'BR') {
+        offset += 1
+      } else {
+        for (const child of el.childNodes) {
+          walk(child)
+          if (found) return

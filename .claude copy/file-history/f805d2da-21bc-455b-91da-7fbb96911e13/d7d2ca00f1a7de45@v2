@@ -1,0 +1,96 @@
+import { NextRequest } from 'next/server'
+import { createSupabaseServerClient } from '@/lib/supabase-server'
+import type { Book, Quote } from '@/types'
+
+export async function GET(req: NextRequest) {
+  const supabase = await createSupabaseServerClient()
+  const tag = req.nextUrl.searchParams.get('tag')?.trim()
+  if (!tag) return Response.json({ error: 'tag param required' }, { status: 400 })
+
+  const { data, error } = await supabase
+    .from('quotes')
+    .select('*, book:books(*)')
+    .contains('tags', [tag])
+    .order('created_at', { ascending: true })
+
+  if (error) return Response.json({ error: error.message }, { status: 500 })
+
+  const quotes = (data ?? []).map(q => ({
+    ...q,
+    tags: q.tags ?? [],
+    book: q.book as Book,
+  })) as (Quote & { book: Book })[]
+
+  const pdf = await generateTagSearchPDF(tag, quotes)
+
+  return new Response(pdf as unknown as BodyInit, {
+    headers: {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${encodeURIComponent(tag)}-quotes.pdf"`,
+    },
+  })
+}
+
+async function generateTagSearchPDF(
+  tag: string,
+  quotes: (Quote & { book: Book })[]
+): Promise<Uint8Array> {
+  const { jsPDF } = await import('jspdf')
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'letter' })
+
+  const margin = 40
+  const pageWidth = doc.internal.pageSize.getWidth()
+  const pageHeight = doc.internal.pageSize.getHeight()
+  const contentWidth = pageWidth - margin * 2
+  let y = margin
+
+  function addDivider() {
+    y += 8
+    doc.setDrawColor(200)
+    doc.line(margin, y, pageWidth - margin, y)
+    y += 8
+  }
+
+  function addHeading(text: string, size = 16) {
+    if (y > pageHeight - 80) { doc.addPage(); y = margin }
+    doc.setFontSize(size)
+    doc.setFont('helvetica', 'bold')
+    doc.text(text, margin, y)
+    y += size + 6
+  }
+
+  function addBody(text: string, size = 11, indent = 0) {
+    doc.setFontSize(size)
+    doc.setFont('helvetica', 'normal')
+    const lines = doc.splitTextToSize(text, contentWidth - indent) as string[]
+    for (const line of lines) {
+      if (y > pageHeight - 40) { doc.addPage(); y = margin }
+      doc.text(line, margin + indent, y)
+      y += size + 4
+    }
+  }
+
+  // Title
+  addHeading(`Tag: #${tag}`, 20)
+  addBody(`${quotes.length} quote${quotes.length !== 1 ? 's' : ''} across ${new Set(quotes.map(q => q.book_id)).size} book${new Set(quotes.map(q => q.book_id)).size !== 1 ? 's' : ''}`, 10)
+  y += 8
+
+  // Group by book
+  const byBook = new Map<string, { book: Book; quotes: (Quote & { book: Book })[] }>()
+  for (const q of quotes) {
+    if (!byBook.has(q.book_id)) byBook.set(q.book_id, { book: q.book, quotes: [] })
+    byBook.get(q.book_id)!.quotes.push(q)
+  }
+
+  for (const [, { book, quotes: bookQuotes }] of byBook) {
+    addDivider()
+    addHeading(book.title, 14)
+    for (const quote of bookQuotes) {
+      if (y > pageHeight - 80) { doc.addPage(); y = margin }
+      addBody(`"${quote.quote_text}"${quote.page_number != null ? ` — p. ${quote.page_number}` : ''}`, 11)
+      y += 4
+    }
+  }
+
+  return doc.output('arraybuffer') as unknown as Uint8Array
+}

@@ -1,0 +1,446 @@
+'use client'
+
+import { useState } from 'react'
+import {
+  DndContext,
+  closestCenter,
+  DragEndEvent,
+  DragOverEvent,
+  DragOverlay,
+  DragStartEvent,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { supabase } from '@/lib/supabase'
+import type { Quote, QuoteHeading } from '@/types'
+
+interface Props {
+  bookId: string
+  headings: QuoteHeading[]
+  quotes: Quote[]
+  onUpdate: (headings: QuoteHeading[], quotes: Quote[]) => void
+}
+
+function SortableQuote({
+  quote,
+  onDelete,
+}: {
+  quote: Quote
+  onDelete: (id: string) => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: quote.id,
+  })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="bg-parchment-50 rounded-xl border border-parchment-300 px-5 py-4 flex gap-3 items-start group shadow-[0_1px_3px_rgba(44,26,14,0.06)]"
+    >
+      {/* Drag handle */}
+      <button
+        {...attributes}
+        {...listeners}
+        className="text-parchment-300 hover:text-parchment-500 cursor-grab active:cursor-grabbing shrink-0 mt-0.5 touch-none"
+        aria-label="Drag to reorder"
+      >
+        <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor">
+          <circle cx="4" cy="3" r="1.5" />
+          <circle cx="8" cy="3" r="1.5" />
+          <circle cx="4" cy="8" r="1.5" />
+          <circle cx="8" cy="8" r="1.5" />
+          <circle cx="4" cy="13" r="1.5" />
+          <circle cx="8" cy="13" r="1.5" />
+        </svg>
+      </button>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm text-parchment-800 leading-relaxed">
+          &ldquo;{quote.quote_text}&rdquo;
+        </p>
+        {quote.page_number != null && (
+          <p className="text-xs text-parchment-400 mt-1.5">p. {quote.page_number}</p>
+        )}
+      </div>
+      <button
+        onClick={() => onDelete(quote.id)}
+        className="text-parchment-300 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 text-lg leading-none shrink-0 mt-0.5"
+        aria-label="Delete quote"
+      >
+        ×
+      </button>
+    </div>
+  )
+}
+
+function QuoteOverlay({ quote }: { quote: Quote }) {
+  return (
+    <div className="bg-parchment-50 rounded-xl border border-parchment-400 shadow-[0_8px_20px_rgba(44,26,14,0.15)] px-5 py-4 opacity-95">
+      <p className="text-sm text-parchment-800 leading-relaxed">
+        &ldquo;{quote.quote_text}&rdquo;
+      </p>
+      {quote.page_number != null && (
+        <p className="text-xs text-parchment-400 mt-1.5">p. {quote.page_number}</p>
+      )}
+    </div>
+  )
+}
+
+export default function QuotesWithHeadings({ bookId, headings, quotes, onUpdate }: Props) {
+  const [newHeadingName, setNewHeadingName] = useState('')
+  const [addingHeading, setAddingHeading] = useState(false)
+
+  const [editingHeadingId, setEditingHeadingId] = useState<string | null>(null)
+  const [editingHeadingName, setEditingHeadingName] = useState('')
+
+  const [addQuoteHeadingId, setAddQuoteHeadingId] = useState<string | null>(null)
+  const [quoteForm, setQuoteForm] = useState({ text: '', page: '' })
+  const [addingQuote, setAddingQuote] = useState(false)
+
+  const [activeQuoteId, setActiveQuoteId] = useState<string | null>(null)
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
+
+  const unassignedQuotes = quotes.filter(q => !q.heading_id || !headings.find(h => h.id === q.heading_id))
+
+  async function handleAddHeading() {
+    if (!newHeadingName.trim()) return
+    setAddingHeading(true)
+    const res = await fetch('/api/quote-headings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ book_id: bookId, name: newHeadingName.trim() }),
+    })
+    const data = await res.json()
+    onUpdate([...headings, data as QuoteHeading], quotes)
+    setNewHeadingName('')
+    setAddingHeading(false)
+  }
+
+  async function handleRenameHeading(id: string, name: string) {
+    await fetch(`/api/quote-headings/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    })
+    onUpdate(headings.map(h => h.id === id ? { ...h, name } : h), quotes)
+    setEditingHeadingId(null)
+  }
+
+  async function handleDeleteHeading(id: string) {
+    await fetch(`/api/quote-headings/${id}`, { method: 'DELETE' })
+    onUpdate(
+      headings.filter(h => h.id !== id),
+      quotes.map(q => q.heading_id === id ? { ...q, heading_id: null } : q)
+    )
+  }
+
+  async function handleAddQuote(headingId: string | null) {
+    if (!quoteForm.text.trim()) return
+    setAddingQuote(true)
+
+    const existingInSection = quotes.filter(q =>
+      headingId ? q.heading_id === headingId : !q.heading_id
+    )
+    const maxOrder = Math.max(0, ...existingInSection.map(q => q.sort_order ?? 0))
+
+    const { data } = await supabase
+      .from('quotes')
+      .insert({
+        book_id: bookId,
+        quote_text: quoteForm.text.trim(),
+        page_number: quoteForm.page ? Number(quoteForm.page) : null,
+        heading_id: headingId,
+        sort_order: maxOrder + 1,
+      })
+      .select()
+      .single()
+
+    if (data) {
+      onUpdate(headings, [...quotes, data as Quote])
+      setQuoteForm({ text: '', page: '' })
+      setAddQuoteHeadingId(null)
+    }
+    setAddingQuote(false)
+  }
+
+  async function handleDeleteQuote(quoteId: string) {
+    await fetch(`/api/quotes/${quoteId}`, { method: 'DELETE' })
+    onUpdate(headings, quotes.filter(q => q.id !== quoteId))
+  }
+
+  function handleDragStart(event: DragStartEvent) {
+    setActiveQuoteId(event.active.id as string)
+  }
+
+  async function handleDragOver(event: DragOverEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+
+    const draggedQuote = quotes.find(q => q.id === active.id)
+    if (!draggedQuote) return
+
+    const overHeading = headings.find(h => h.id === over.id)
+    if (overHeading && draggedQuote.heading_id !== overHeading.id) {
+      const newHeadingId = overHeading.id
+      const newQuotes = quotes.map(q =>
+        q.id === draggedQuote.id ? { ...q, heading_id: newHeadingId } : q
+      )
+      onUpdate(headings, newQuotes)
+    }
+  }
+
+  async function handleDragEnd(event: DragEndEvent) {
+    setActiveQuoteId(null)
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+
+    const draggedQuote = quotes.find(q => q.id === active.id)
+    const overQuote = quotes.find(q => q.id === over.id)
+
+    if (!draggedQuote) return
+
+    const overHeading = headings.find(h => h.id === over.id)
+    const targetHeadingId = overHeading
+      ? overHeading.id
+      : overQuote?.heading_id ?? null
+
+    const sectionQuotes = quotes
+      .filter(q => {
+        const qHeading = q.heading_id ?? null
+        return qHeading === targetHeadingId && q.id !== draggedQuote.id
+      })
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+
+    let newOrder: string[]
+    if (overQuote) {
+      const overIndex = sectionQuotes.findIndex(q => q.id === overQuote.id)
+      sectionQuotes.splice(overIndex, 0, draggedQuote)
+      newOrder = sectionQuotes.map(q => q.id)
+    } else {
+      newOrder = [...sectionQuotes.map(q => q.id), draggedQuote.id]
+    }
+
+    const updates = newOrder.map((id, i) => ({
+      id,
+      sort_order: i + 1,
+      heading_id: targetHeadingId,
+    }))
+
+    for (const u of updates) {
+      await fetch(`/api/quotes/${u.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sort_order: u.sort_order, heading_id: u.heading_id }),
+      })
+    }
+
+    const updatedQuotes = quotes.map(q => {
+      const upd = updates.find(u => u.id === q.id)
+      return upd ? { ...q, sort_order: upd.sort_order, heading_id: upd.heading_id } : q
+    })
+    onUpdate(headings, updatedQuotes)
+  }
+
+  const activeQuote = quotes.find(q => q.id === activeQuoteId)
+
+  function renderAddQuoteForm(headingId: string | null) {
+    const isOpen = addQuoteHeadingId === headingId || (headingId === null && addQuoteHeadingId === 'unassigned')
+    const openKey = headingId ?? 'unassigned'
+    if (!isOpen) {
+      return (
+        <button
+          onClick={() => setAddQuoteHeadingId(openKey)}
+          className="text-xs text-parchment-400 hover:text-forest-600 transition-colors mt-1"
+        >
+          + Add quote
+        </button>
+      )
+    }
+    return (
+      <div className="bg-parchment-200 rounded-lg border border-parchment-300 p-3 space-y-2 mt-2">
+        <textarea
+          value={quoteForm.text}
+          onChange={e => setQuoteForm(f => ({ ...f, text: e.target.value }))}
+          placeholder="Quote text…"
+          rows={2}
+          autoFocus
+          className="w-full resize-none border border-parchment-300 bg-parchment-50 rounded-lg px-3 py-2 text-sm text-parchment-800 leading-relaxed placeholder:text-parchment-400 focus:outline-none focus:ring-2 focus:ring-forest-700/20 focus:border-forest-600 transition-colors"
+        />
+        <div className="flex gap-2 items-center">
+          <label className="text-sm text-parchment-500 shrink-0">p.</label>
+          <input
+            type="number"
+            min={1}
+            value={quoteForm.page}
+            onChange={e => setQuoteForm(f => ({ ...f, page: e.target.value }))}
+            placeholder="—"
+            className="w-16 border border-parchment-300 bg-parchment-50 rounded-lg px-2 py-1.5 text-sm text-parchment-900 focus:outline-none focus:ring-2 focus:ring-forest-700/20 focus:border-forest-600 transition-colors"
+          />
+          <div className="ml-auto flex gap-2">
+            <button
+              onClick={() => { setAddQuoteHeadingId(null); setQuoteForm({ text: '', page: '' }) }}
+              className="text-sm text-parchment-400 hover:text-parchment-700 px-3 py-1.5 rounded-lg transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => handleAddQuote(headingId)}
+              disabled={addingQuote || !quoteForm.text.trim()}
+              className="bg-forest-700 hover:bg-forest-600 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-40"
+            >
+              {addingQuote ? 'Adding…' : 'Add'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const allQuoteIds = quotes.map(q => q.id)
+
+  return (
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
+      onDragEnd={handleDragEnd}
+    >
+      <div className="space-y-6">
+        {/* Add new heading */}
+        <div className="flex gap-2">
+          <input
+            value={newHeadingName}
+            onChange={e => setNewHeadingName(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleAddHeading() }}
+            placeholder="New heading name…"
+            className="flex-1 border border-parchment-300 bg-parchment-50 rounded-lg px-3 py-2 text-sm text-parchment-900 placeholder:text-parchment-400 focus:outline-none focus:ring-2 focus:ring-forest-700/20 focus:border-forest-600 transition-colors"
+          />
+          <button
+            onClick={handleAddHeading}
+            disabled={addingHeading || !newHeadingName.trim()}
+            className="bg-parchment-700 hover:bg-parchment-600 text-parchment-100 px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-40"
+          >
+            + Heading
+          </button>
+        </div>
+
+        <SortableContext items={allQuoteIds} strategy={verticalListSortingStrategy}>
+          {/* Headings with their quotes */}
+          {headings
+            .sort((a, b) => a.sort_order - b.sort_order)
+            .map(heading => {
+              const headingQuotes = quotes
+                .filter(q => q.heading_id === heading.id)
+                .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+
+              return (
+                <div key={heading.id}>
+                  {/* Heading label */}
+                  <div className="flex items-center gap-2 mb-2 group/heading">
+                    {editingHeadingId === heading.id ? (
+                      <div className="flex gap-2 flex-1">
+                        <input
+                          autoFocus
+                          value={editingHeadingName}
+                          onChange={e => setEditingHeadingName(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') handleRenameHeading(heading.id, editingHeadingName)
+                            if (e.key === 'Escape') setEditingHeadingId(null)
+                          }}
+                          className="flex-1 text-sm font-semibold border border-parchment-300 bg-parchment-50 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-forest-700/20 text-parchment-900"
+                        />
+                        <button
+                          onClick={() => handleRenameHeading(heading.id, editingHeadingName)}
+                          className="text-xs text-forest-600 hover:text-forest-800"
+                        >
+                          Save
+                        </button>
+                        <button
+                          onClick={() => setEditingHeadingId(null)}
+                          className="text-xs text-parchment-400 hover:text-parchment-700"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <h3 className="text-xs font-bold uppercase tracking-widest text-parchment-500 flex-1">
+                          {heading.name}
+                        </h3>
+                        <button
+                          onClick={() => { setEditingHeadingId(heading.id); setEditingHeadingName(heading.name) }}
+                          className="text-xs text-parchment-300 hover:text-parchment-600 opacity-0 group-hover/heading:opacity-100 transition-opacity"
+                        >
+                          Rename
+                        </button>
+                        <button
+                          onClick={() => handleDeleteHeading(heading.id)}
+                          className="text-xs text-parchment-300 hover:text-red-400 opacity-0 group-hover/heading:opacity-100 transition-opacity"
+                        >
+                          Delete
+                        </button>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    {headingQuotes.map(quote => (
+                      <SortableQuote
+                        key={quote.id}
+                        quote={quote}
+                        onDelete={handleDeleteQuote}
+                      />
+                    ))}
+                    {headingQuotes.length === 0 && (
+                      <p className="text-xs text-parchment-300 py-2">Drop quotes here</p>
+                    )}
+                  </div>
+                  {renderAddQuoteForm(heading.id)}
+                </div>
+              )
+            })}
+
+          {/* Unassigned quotes */}
+          <div>
+            {headings.length > 0 && (
+              <h3 className="text-xs font-bold uppercase tracking-widest text-parchment-400 mb-2">
+                Unsorted
+              </h3>
+            )}
+            <div className="space-y-2">
+              {unassignedQuotes
+                .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+                .map(quote => (
+                  <SortableQuote
+                    key={quote.id}
+                    quote={quote}
+                    onDelete={handleDeleteQuote}
+                  />
+                ))}
+            </div>
+            {renderAddQuoteForm(null)}
+          </div>
+        </SortableContext>
+      </div>
+
+      <DragOverlay>
+        {activeQuote && <QuoteOverlay quote={activeQuote} />}
+      </DragOverlay>
+    </DndContext>
+  )
+}

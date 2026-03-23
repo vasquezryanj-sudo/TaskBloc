@@ -1,0 +1,63 @@
+export type BookStatus = 'active' | 'completed' | 'paused'
+export type NoteTab = 'outline' | 'scratch'
+
+export interface Book {
+  id: string
+  title: string
+  current_page: number
+  total_pages: number
+  sessions_per_week: number
+  is_priority: boolean
+  status: BookStatus
+  created_at: string
+  updated_at: string
+}
+
+export interface Session {
+  id: string
+  book_id: string
+  scheduled_date: string // ISO date string YYYY-MM-DD
+  pages_start: number
+  pages_end: number
+  actual_end_page: number | null
+  is_completed: boolean
+  order_index: number
+  created_at: string
+  updated_at: string
+  // joined
+  book?: Book
+}
+
+export interface PriorityItem {
+  id: string
+  title: string
+  description: string | null
+  sessions_needed: number
+  scheduled_date: string // ISO date string YYYY-MM-DD
+  is_completed: boolean
+  created_at: string
+}
+
+export interface BookNote {
+  id: string
+  book_id: string
+  tab: NoteTab
+  content: string
+  updated_at: string
+}
+
+export interface Quote {
+  id: string
+  book_id: string
+  quote_text: string
+  page_number: number | null
+  created_at: string
+}
+
+// Schedule types
+export interface ScheduleEntry {
+  date: string // YYYY-MM-DD
+  type: 'session' | 'priority'
+  session?: Session
+  priority?: PriorityItem
+}

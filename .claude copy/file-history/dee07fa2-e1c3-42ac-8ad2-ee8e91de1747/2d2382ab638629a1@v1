@@ -1,0 +1,306 @@
+'use client'
+
+import { useState } from 'react'
+import { enqueue } from '@/lib/syncQueue'
+import type { Book } from '@/types'
+
+type ItemType = 'book' | 'article' | 'podcast'
+
+interface Props {
+  onClose: () => void
+  onSuccess: () => void
+}
+
+export default function AddItemModal({ onClose, onSuccess }: Props) {
+  const [activeTab, setActiveTab] = useState<ItemType>('book')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  // Book fields
+  const [bookTitle, setBookTitle] = useState('')
+  const [bookAuthor, setBookAuthor] = useState('')
+  const [bookPages, setBookPages] = useState('')
+
+  // Article fields
+  const [articleTitle, setArticleTitle] = useState('')
+  const [articleAuthor, setArticleAuthor] = useState('')
+  const [articlePublication, setArticlePublication] = useState('')
+  const [articleDate, setArticleDate] = useState('')
+
+  // Podcast fields
+  const [podcastTitle, setPodcastTitle] = useState('')
+  const [podcastShow, setPodcastShow] = useState('')
+  const [podcastGuests, setPodcastGuests] = useState('')
+  const [podcastDate, setPodcastDate] = useState('')
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setError('')
+
+    let body: Record<string, string | number> = {}
+
+    if (activeTab === 'book') {
+      if (!bookTitle.trim()) { setError('Title is required'); return }
+      if (!bookPages || Number(bookPages) < 1) { setError('Total pages is required'); return }
+      body = {
+        type: 'book',
+        title: bookTitle.trim(),
+        author: bookAuthor.trim(),
+        total_pages: Number(bookPages),
+      }
+    } else if (activeTab === 'article') {
+      if (!articleTitle.trim()) { setError('Title is required'); return }
+      body = {
+        type: 'article',
+        title: articleTitle.trim(),
+        author: articleAuthor.trim(),
+        publication: articlePublication.trim(),
+        article_date: articleDate.trim(),
+      }
+    } else {
+      if (!podcastTitle.trim()) { setError('Episode title is required'); return }
+      body = {
+        type: 'podcast',
+        title: podcastTitle.trim(),
+        show_title: podcastShow.trim(),
+        guests: podcastGuests.trim(),
+        air_date: podcastDate.trim(),
+      }
+    }
+
+    setLoading(true)
+    try {
+      const res = await fetch('/api/books', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (res.ok) {
+        onSuccess()
+        onClose()
+      } else {
+        const json = await res.json()
+        setError(json.error ?? 'Something went wrong')
+      }
+    } catch {
+      // Network error — queue for sync when back online
+      const tempId = `temp_${crypto.randomUUID()}`
+      const now = new Date().toISOString()
+      const localBook: Book = {
+        id: tempId,
+        title: (body.title as string) ?? '',
+        type: activeTab,
+        author: (body.author as string) || null,
+        current_page: 0,
+        total_pages: activeTab === 'book' ? ((body.total_pages as number) ?? 0) : null,
+        publication: activeTab === 'article' ? ((body.publication as string) || null) : null,
+        article_date: activeTab === 'article' ? ((body.article_date as string) || null) : null,
+        show_title: activeTab === 'podcast' ? ((body.show_title as string) || null) : null,
+        guests: activeTab === 'podcast' ? ((body.guests as string) || null) : null,
+        air_date: activeTab === 'podcast' ? ((body.air_date as string) || null) : null,
+        sessions_per_week: 4,
+        sort_order: null,
+        status: 'active',
+        date_finished: null,
+        created_at: now,
+        updated_at: now,
+      }
+      await enqueue({ method: 'POST', url: '/api/books', body, tempId, localBook })
+      window.dispatchEvent(new Event('mindwell-queue-updated'))
+      onSuccess()
+      onClose()
+    }
+    setLoading(false)
+  }
+
+  const TABS: { key: ItemType; label: string }[] = [
+    { key: 'book', label: 'Book' },
+    { key: 'article', label: 'Article' },
+    { key: 'podcast', label: 'Podcast' },
+  ]
+
+  const inputClass = 'w-full bg-fog-100 border border-fog-300 rounded-lg px-3 py-2 text-sm text-navy-900 placeholder:text-fog-400 focus:outline-none focus:ring-2 focus:ring-navy-500/20 transition-all'
+  const labelClass = 'block text-xs font-medium text-fog-600 mb-1'
+
+  return (
+    <div
+      className="fixed inset-0 bg-navy-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div className="bg-white rounded-2xl shadow-[0_24px_80px_rgba(14,30,53,0.2)] w-full max-w-md">
+        {/* Header */}
+        <div className="px-6 pt-6 pb-4">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-base font-semibold text-navy-900">Add New</h2>
+            <button
+              onClick={onClose}
+              className="text-fog-400 hover:text-navy-700 text-xl leading-none transition-colors"
+            >
+              ×
+            </button>
+          </div>
+
+          {/* Type tabs */}
+          <div className="flex gap-1 bg-fog-100 rounded-xl p-1">
+            {TABS.map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => { setActiveTab(tab.key); setError('') }}
+                className={`flex-1 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                  activeTab === tab.key
+                    ? 'bg-white text-navy-700 shadow-sm'
+                    : 'text-fog-500 hover:text-navy-600'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="px-6 pb-6 space-y-4">
+          {activeTab === 'book' && (
+            <>
+              <div>
+                <label className={labelClass}>Title <span className="text-ember-500">*</span></label>
+                <input
+                  autoFocus
+                  value={bookTitle}
+                  onChange={e => setBookTitle(e.target.value)}
+                  placeholder="Book title"
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Author</label>
+                <input
+                  value={bookAuthor}
+                  onChange={e => setBookAuthor(e.target.value)}
+                  placeholder="Author name"
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Total Pages <span className="text-ember-500">*</span></label>
+                <input
+                  type="number"
+                  min={1}
+                  value={bookPages}
+                  onChange={e => setBookPages(e.target.value)}
+                  placeholder="350"
+                  className={inputClass}
+                />
+              </div>
+            </>
+          )}
+
+          {activeTab === 'article' && (
+            <>
+              <div>
+                <label className={labelClass}>Title <span className="text-ember-500">*</span></label>
+                <input
+                  autoFocus
+                  value={articleTitle}
+                  onChange={e => setArticleTitle(e.target.value)}
+                  placeholder="Article title"
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Author</label>
+                <input
+                  value={articleAuthor}
+                  onChange={e => setArticleAuthor(e.target.value)}
+                  placeholder="Author name"
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Publication</label>
+                <input
+                  value={articlePublication}
+                  onChange={e => setArticlePublication(e.target.value)}
+                  placeholder="The Atlantic, Wired…"
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Date</label>
+                <input
+                  value={articleDate}
+                  onChange={e => setArticleDate(e.target.value)}
+                  placeholder="March 2025"
+                  className={inputClass}
+                />
+              </div>
+            </>
+          )}
+
+          {activeTab === 'podcast' && (
+            <>
+              <div>
+                <label className={labelClass}>Episode Title <span className="text-ember-500">*</span></label>
+                <input
+                  autoFocus
+                  value={podcastTitle}
+                  onChange={e => setPodcastTitle(e.target.value)}
+                  placeholder="Episode title"
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Show Title</label>
+                <input
+                  value={podcastShow}
+                  onChange={e => setPodcastShow(e.target.value)}
+                  placeholder="Show name"
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Guests</label>
+                <input
+                  value={podcastGuests}
+                  onChange={e => setPodcastGuests(e.target.value)}
+                  placeholder="Guest names"
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Air Date</label>
+                <input
+                  value={podcastDate}
+                  onChange={e => setPodcastDate(e.target.value)}
+                  placeholder="March 2025"
+                  className={inputClass}
+                />
+              </div>
+            </>
+          )}
+
+          {error && (
+            <p className="text-sm text-rose-600">{error}</p>
+          )}
+
+          <div className="flex gap-3 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 bg-fog-100 hover:bg-fog-200 text-navy-700 px-4 py-2.5 rounded-full text-sm font-medium transition-all"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex-1 bg-navy-700 hover:bg-navy-800 text-white px-4 py-2.5 rounded-full text-sm font-semibold transition-all disabled:opacity-50"
+            >
+              {loading ? 'Adding…' : `Add ${activeTab === 'podcast' ? 'Episode' : activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}`}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}

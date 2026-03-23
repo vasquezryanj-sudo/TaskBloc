@@ -1,0 +1,9 @@
+{
+  "id": "4",
+  "subject": "Push changes to GitHub",
+  "description": "Commit and push all changes to the GitHub repository.",
+  "activeForm": "Pushing to GitHub",
+  "status": "in_progress",
+  "blocks": [],
+  "blockedBy": []
+}

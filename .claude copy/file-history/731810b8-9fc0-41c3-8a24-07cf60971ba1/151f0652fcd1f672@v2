@@ -1,0 +1,50 @@
+import { NextRequest } from 'next/server'
+import { supabase } from '@/lib/supabase'
+import { buildAllSchedules } from '@/lib/scheduling'
+import type { Book } from '@/types'
+
+/**
+ * PATCH /api/books/reorder
+ * Body: { orderedIds: string[] }  — active books in their new order
+ * Updates sort_order for each book, then rebuilds all schedules.
+ */
+export async function PATCH(req: NextRequest) {
+  const { orderedIds } = await req.json()
+  if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+    return Response.json({ error: 'orderedIds required' }, { status: 400 })
+  }
+
+  // Update sort_order for each book
+  for (let i = 0; i < orderedIds.length; i++) {
+    await supabase
+      .from('books')
+      .update({ sort_order: i + 1 })
+      .eq('id', orderedIds[i])
+  }
+
+  // Rebuild all schedules
+  const { data: allBooksData } = await supabase
+    .from('books')
+    .select('*')
+    .eq('status', 'active')
+
+  const allBooks = (allBooksData as Book[]) ?? []
+
+  if (allBooks.length > 0) {
+    await supabase
+      .from('sessions')
+      .delete()
+      .in('book_id', allBooks.map(b => b.id))
+      .eq('is_completed', false)
+  }
+
+  const allRows = buildAllSchedules(allBooks)
+  if (allRows.length > 0) {
+    const CHUNK = 200
+    for (let i = 0; i < allRows.length; i += CHUNK) {
+      await supabase.from('sessions').insert(allRows.slice(i, i + CHUNK))
+    }
+  }
+
+  return Response.json({ success: true })
+}

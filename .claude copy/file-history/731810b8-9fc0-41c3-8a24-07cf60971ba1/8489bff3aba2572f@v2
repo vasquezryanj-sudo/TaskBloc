@@ -1,0 +1,140 @@
+import { addDays, format, getDay, isAfter, isSameDay, parseISO } from 'date-fns'
+import type { Book, PriorityItem, Session } from '@/types'
+
+// Days of week (0=Sun, 1=Mon, ... 6=Sat)
+const SESSION_DAYS_BY_COUNT: Record<number, number[]> = {
+  1: [1],           // Mon
+  2: [1, 4],        // Mon, Thu
+  3: [1, 3, 5],     // Mon, Wed, Fri
+  4: [1, 2, 4, 6],  // Mon, Tue, Thu, Sat
+  5: [1, 2, 3, 5, 6], // Mon, Tue, Wed, Fri, Sat
+  6: [1, 2, 3, 4, 5, 6],
+  7: [0, 1, 2, 3, 4, 5, 6],
+}
+
+function getSessionDays(sessionsPerWeek: number): number[] {
+  return SESSION_DAYS_BY_COUNT[Math.min(Math.max(sessionsPerWeek, 1), 7)] ?? SESSION_DAYS_BY_COUNT[3]
+}
+
+/**
+ * Returns the next N reading dates starting from (and including) `from`,
+ * skipping dates occupied by priority items.
+ */
+export function getNextReadingDates(
+  from: Date,
+  count: number,
+  sessionsPerWeek: number,
+  blockedDates: Set<string> = new Set()
+): Date[] {
+  const sessionDays = getSessionDays(sessionsPerWeek)
+  const dates: Date[] = []
+  let cursor = new Date(from)
+
+  while (dates.length < count) {
+    const dow = getDay(cursor)
+    const iso = format(cursor, 'yyyy-MM-dd')
+    if (sessionDays.includes(dow) && !blockedDates.has(iso)) {
+      dates.push(new Date(cursor))
+    }
+    cursor = addDays(cursor, 1)
+  }
+
+  return dates
+}
+
+/**
+ * Builds the full session schedule for a book.
+ * Returns an array of session rows (without id/created_at/updated_at).
+ */
+export function buildSchedule(
+  book: Book,
+  priorityItems: PriorityItem[],
+  startDate: Date = new Date()
+): Omit<Session, 'id' | 'created_at' | 'updated_at'>[] {
+  const remainingPages = book.total_pages - book.current_page
+  if (remainingPages <= 0) return []
+
+  // Build set of blocked dates from priority items
+  const blockedDates = new Set<string>()
+  for (const item of priorityItems) {
+    if (!item.is_completed) {
+      // Block `sessions_needed` consecutive reading dates starting from scheduled_date
+      const itemStart = parseISO(item.scheduled_date)
+      const itemDates = getNextReadingDates(itemStart, item.sessions_needed, book.sessions_per_week)
+      itemDates.forEach(d => blockedDates.add(format(d, 'yyyy-MM-dd')))
+    }
+  }
+
+  // Calculate pages per session (distribute evenly, last session gets remainder)
+  const totalSessions = Math.ceil(remainingPages / Math.ceil(remainingPages / 30)) // ~30 pages default
+  const pagesPerSession = Math.max(1, Math.round(remainingPages / Math.max(totalSessions, 1)))
+  const sessionCount = Math.ceil(remainingPages / pagesPerSession)
+
+  // Get reading dates
+  const dates = getNextReadingDates(startDate, sessionCount, book.sessions_per_week, blockedDates)
+
+  const sessions: Omit<Session, 'id' | 'created_at' | 'updated_at'>[] = []
+  let pageStart = book.current_page + 1
+
+  for (let i = 0; i < dates.length; i++) {
+    const isLast = i === dates.length - 1
+    const pageEnd = isLast ? book.total_pages : Math.min(pageStart + pagesPerSession - 1, book.total_pages)
+
+    sessions.push({
+      book_id: book.id,
+      scheduled_date: format(dates[i], 'yyyy-MM-dd'),
+      pages_start: pageStart,
+      pages_end: pageEnd,
+      actual_end_page: null,
+      is_completed: false,
+      order_index: i,
+    })
+
+    pageStart = pageEnd + 1
+    if (pageStart > book.total_pages) break
+  }
+
+  return sessions
+}
+
+/**
+ * Recalculates pages-per-session based on updated current page and remaining sessions.
+ */
+export function redistributePages(
+  currentPage: number,
+  totalPages: number,
+  sessions: Session[]
+): Array<{ id: string; pages_start: number; pages_end: number }> {
+  const upcoming = sessions
+    .filter(s => !s.is_completed)
+    .sort((a, b) => a.order_index - b.order_index)
+
+  if (upcoming.length === 0) return []
+
+  const remaining = totalPages - currentPage
+  const pagesPerSession = Math.max(1, Math.round(remaining / upcoming.length))
+  const updates: Array<{ id: string; pages_start: number; pages_end: number }> = []
+
+  let pageStart = currentPage + 1
+  for (let i = 0; i < upcoming.length; i++) {
+    const isLast = i === upcoming.length - 1
+    const pageEnd = isLast ? totalPages : Math.min(pageStart + pagesPerSession - 1, totalPages)
+    updates.push({ id: upcoming[i].id, pages_start: pageStart, pages_end: pageEnd })
+    pageStart = pageEnd + 1
+    if (pageStart > totalPages) break
+  }
+
+  return updates
+}
+
+/**
+ * Projects the finish date given a list of upcoming sessions.
+ */
+export function projectFinishDate(sessions: Session[]): string | null {
+  const lastSession = sessions
+    .filter(s => !s.is_completed)
+    .sort((a, b) => a.order_index - b.order_index)
+    .at(-1)
+
+  return lastSession?.scheduled_date ?? null
+}

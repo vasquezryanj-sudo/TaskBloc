@@ -1,0 +1,9 @@
+-- Migration 003: Add 'queued' to books.status allowed values
+-- Run this in the Supabase SQL editor
+
+-- Drop the existing status check constraint
+ALTER TABLE books DROP CONSTRAINT IF EXISTS books_status_check;
+
+-- Add new constraint that includes 'queued'
+ALTER TABLE books ADD CONSTRAINT books_status_check
+  CHECK (status IN ('active', 'completed', 'paused', 'queued'));

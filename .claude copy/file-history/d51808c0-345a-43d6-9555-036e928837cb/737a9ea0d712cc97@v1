@@ -1,0 +1,73 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-geist);
+  --font-serif: var(--font-lora);
+}
+
+@theme {
+  /* Base — Spotify-dark neutral scale */
+  --color-well-50:  #ffffff;   /* primary text — pure white */
+  --color-well-100: #f5f5f5;
+  --color-well-200: #e0e0e0;
+  --color-well-300: #b3b3b3;   /* Spotify secondary text */
+  --color-well-400: #9e9e9e;
+  --color-well-500: #6a6a6a;
+  --color-well-600: #535353;   /* Spotify muted */
+  --color-well-700: #404040;
+  --color-well-800: #282828;   /* elevated card */
+  --color-well-900: #181818;   /* card background */
+  --color-well-950: #121212;   /* page background */
+
+  /* Cream — warm white primary interactive */
+  --color-cream-50:  #fffefb;
+  --color-cream-100: #fdfaf4;
+  --color-cream-200: #f5f0e8;   /* primary buttons, links, active states */
+  --color-cream-300: #ede5d6;
+  --color-cream-400: #d6c9b4;
+  --color-cream-500: #b8a890;
+  --color-cream-600: #8f7a60;
+  --color-cream-700: #6b5840;
+  --color-cream-800: #3d2e1e;
+  --color-cream-900: #211608;
+  --color-cream-950: #120c03;
+
+  /* Gold — secondary accent */
+  --color-gold-50:  #fdf9ee;
+  --color-gold-100: #faf0d0;
+  --color-gold-200: #f2dc9a;
+  --color-gold-300: #e8c660;
+  --color-gold-400: #d4a853;   /* secondary accent, badges */
+  --color-gold-500: #c9963e;
+  --color-gold-600: #b07a28;
+  --color-gold-700: #8a5e1a;
+  --color-gold-800: #5c3c10;
+  --color-gold-900: #321f08;
+  --color-gold-950: #1a0e02;
+}
+
+*, *::before, *::after {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-sans), system-ui, sans-serif;
+  background-color: #121212;
+}
+
+/* Thin, unobtrusive scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: #404040;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: #535353;
+}

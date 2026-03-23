@@ -1,0 +1,44 @@
+Major redesign and feature update. Please implement all of the following:
+Completed section:
+
+Split into "Completed Books" and "Completed Articles" as separate sections
+Each shows only the 3 most recent items by default, with a "Show more" button to reveal the rest
+
+Add button consolidation:
+
+Replace the separate +Book and +Article buttons with a single "+" icon button
+Clicking it opens a modal with three tabs: Book, Article, Podcast
+Book fields: Title, Author, Total Pages
+Article fields: Title, Author, Publication, Date
+Podcast fields: Episode Title, Show Title, Guests, Air Date
+
+Book/Article/Podcast cards on homepage:
+
+Book: Title, Author, progress bar, complete toggle only
+Article: Title, Author, with Publication and Date as a subheading
+Podcast: Episode Title, Date, with Show Title as a subheading
+Remove Edit and Notes buttons from all cards
+Make the title clickable — opens a detail popup
+
+Detail popup (replaces Notes page):
+
+Book: Title, Author, Total Pages, Current Page (editable via pencil icon)
+Article: Title, Author, Publication, Date (editable via pencil icon)
+Podcast: Episode Title, Show Title, Guests, Air Date (editable via pencil icon)
+Below the fields: tabs for Outline (enforce outline formatting), Brainstorm (freewrite, formerly Scratch), and Quotes
+All tabs still exportable as PDF and searchable globally
+Pencil icon in corner to edit the main fields
+
+Quotes tab:
+
+Tags visible inline on each quote widget without needing to expand
+Keep it minimal — no expansion needed just to see tags
+
+Aesthetic overhaul:
+
+Light blue-gray background (something like #e8edf2 or #dde4ed)
+Deep blue accents (like #1e3a5f or #1a3a6b)
+Deep amber accents (like #b5620a or #c47209)
+Clean, minimal, editorial feel
+
+Push to GitHub when done.

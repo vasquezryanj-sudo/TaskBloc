@@ -1,0 +1,577 @@
+     1→<!DOCTYPE html>
+     2→<html lang="en">
+     3→<head>
+     4→<meta charset="UTF-8">
+     5→<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+     6→<title>TaskBloc</title>
+     7→<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+     8→<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+     9→<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+    10→<script src="https://accounts.google.com/gsi/client" async defer></script>
+    11→<link rel="apple-touch-icon" href="icon.png">
+    12→<link rel="icon" type="image/png" href="data:image/png;base64,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">
+    13→<link rel="manifest" href="manifest.json">
+    14→<meta name="apple-mobile-web-app-capable" content="yes">
+    15→<meta name="apple-mobile-web-app-status-bar-style" content="default">
+    16→<meta name="apple-mobile-web-app-title" content="TaskBloc">
+    17→<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    18→<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=Nunito:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    19→<style>
+    20→*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    21→:root{
+    22→  --bg:#faf7f2;--bg2:#f4ede3;--surface:#fffcf8;--surface2:#f7f1e8;--surface3:#ede5d8;
+    23→  --border:#e0d4c3;--border2:#cfc0aa;
+    24→  --accent:#c45c2a;--accent-light:#f0e8df;--accent2:#7a9e7e;--accent2-light:#e8f0e9;
+    25→  --text:#3a2e24;--text2:#7a6a58;--text3:#b0a090;
+    26→  --gold:#c49a3c;--gold-light:#fdf3dc;--purple:#8b6fb5;
+    27→  --shadow:rgba(90,60,30,0.08);--shadow2:rgba(90,60,30,0.15);
+    28→  --safe-bottom:env(safe-area-inset-bottom,0px);
+    29→}
+    30→html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Nunito',sans-serif;overflow-x:hidden;}
+    31→#root{height:100%;}
+    32→::-webkit-scrollbar{width:4px;height:4px;}
+    33→::-webkit-scrollbar-thumb{background:var(--border);border-radius:10px;}
+    34→.app{display:flex;height:100dvh;overflow:hidden;}
+    35→
+    36→/* SIDEBAR */
+    37→.sidebar{width:220px;min-width:220px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:24px 14px 16px;gap:2px;box-shadow:2px 0 10px var(--shadow);overflow-y:auto;flex-shrink:0;}
+    38→.sidebar-logo{font-family:'Lora',serif;font-weight:700;font-size:20px;color:var(--accent);margin-bottom:4px;}
+    39→.sidebar-sub{font-size:10px;color:var(--text3);margin-bottom:20px;}
+    40→.sidebar-section{font-weight:700;font-size:9px;text-transform:uppercase;letter-spacing:1.3px;color:var(--text3);padding:12px 10px 5px;}
+    41→.s-day{padding:9px 10px;border-radius:10px;cursor:pointer;transition:background .15s;border:1.5px solid transparent;}
+    42→.s-day:hover{background:var(--surface2);}
+    43→.s-day.active{background:var(--surface2);border-color:var(--border);}
+    44→.s-day.today{border-color:var(--accent)!important;background:#fef4ee;}
+    45→.s-day-label{font-weight:700;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--text3);}
+    46→.s-day.today .s-day-label{color:var(--accent);}
+    47→.s-day-date{font-size:12px;font-weight:600;color:var(--text);margin-top:1px;}
+    48→.s-day-count{font-size:9px;color:var(--text3);margin-top:1px;}
+    49→
+    50→/* MAIN */
+    51→.main{flex:1;overflow-y:auto;padding:28px 24px 32px;display:flex;flex-direction:column;gap:20px;}
+    52→
+    53→/* DAY BLOCK */
+    54→.day-block{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:22px;box-shadow:0 2px 14px var(--shadow);position:relative;}
+    55→.day-block::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,var(--accent),var(--gold));border-radius:16px 16px 0 0;z-index:1;}
+    56→.block-header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:16px;flex-wrap:wrap;}
+    57→.block-title-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+    58→.block-title{font-family:'Lora',serif;font-weight:700;font-size:22px;color:var(--text);}
+    59→.block-sub{font-family:'Nunito',sans-serif;font-weight:400;font-size:11px;color:var(--text3);margin-top:3px;font-style:italic;}
+    60→
+    61→/* DONE BADGES */
+    62→.done-badges{display:flex;align-items:center;gap:3px;position:relative;cursor:pointer;margin-top:2px;}
+    63→.done-badge{width:16px;height:16px;border-radius:50%;background:var(--accent2);display:flex;align-items:center;justify-content:center;font-size:9px;color:#fff;font-weight:700;border:1.5px solid #fff;margin-left:-4px;transition:transform .15s;}
+    64→.done-badge:first-child{margin-left:0;}
+    65→.done-badges:hover .done-badge{transform:scale(1.15);}
+    66→.done-bubble{position:absolute;top:calc(100% + 8px);left:0;background:var(--surface);border:1.5px solid var(--border);border-radius:12px;padding:10px 12px;min-width:200px;max-width:280px;box-shadow:0 4px 20px var(--shadow2);z-index:50;animation:mIn .15s ease;}
+    67→.done-bubble-title{font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--text3);font-weight:700;margin-bottom:8px;}
+    68→.done-bubble-item{display:flex;align-items:center;gap:7px;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px;color:var(--text2);text-decoration:line-through;}
+    69→.done-bubble-item:last-child{border-bottom:none;}
+    70→.done-bubble-check{width:14px;height:14px;border-radius:50%;background:var(--accent2);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:8px;color:#fff;}
+    71→.done-bubble-close{display:block;margin-top:8px;font-size:10px;color:var(--text3);text-align:center;cursor:pointer;font-style:italic;}
+    72→.done-bubble-close:hover{color:var(--accent);}
+    73→
+    74→/* TASK LIST - scrollable */
+    75→.task-list-wrap{overflow-y:auto;max-height:calc(4 * 58px);display:flex;flex-direction:column;gap:6px;padding-right:2px;}
+    76→.task-list-wrap::-webkit-scrollbar{width:3px;}
+    77→.task-list-wrap::-webkit-scrollbar-thumb{background:var(--border2);border-radius:10px;}
+    78→
+    79→/* BUTTONS */
+    80→.btn{padding:7px 15px;border-radius:20px;font-family:'Nunito',sans-serif;font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid var(--border);background:var(--surface2);color:var(--text2);transition:all .15s;white-space:nowrap;}
+    81→.btn:hover{background:var(--surface3);border-color:var(--border2);color:var(--text);}
+    82→.btn:disabled{opacity:.5;cursor:default;}
+    83→.btn.primary{background:var(--accent);color:#fff;border-color:var(--accent);}
+    84→.btn.primary:hover{background:#b05025;}
+    85→.btn.gold{background:var(--gold-light);border-color:#e0c070;color:var(--gold);}
+    86→.btn.gold:hover{background:#fcefd0;border-color:var(--gold);}
+    87→.btn.danger{background:#fde8e8;border-color:#f0b8b8;color:#c0392b;}
+    88→.btn.danger:hover{background:#fbd0d0;}
+    89→.btn.sm{padding:5px 11px;font-size:11px;}
+    90→.btn.purple{background:var(--purple-light,#f0ebf8);border-color:#c5aee8;color:var(--purple);}
+    91→.btn.purple:hover{background:#e8e0f5;}
+    92→
+    93→.add-row{display:flex;gap:8px;margin-bottom:14px;}
+    94→.add-input{flex:1;background:var(--surface2);border:1.5px solid var(--border);border-radius:20px;padding:9px 15px;font-family:'Nunito',sans-serif;font-size:13px;color:var(--text);outline:none;transition:border-color .15s;min-width:0;}
+    95→.add-input::placeholder{color:var(--text3);}
+    96→.add-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(196,92,42,.1);}
+    97→
+    98→/* TASK ITEMS */
+    99→.task-item{background:var(--surface2);border:1.5px solid var(--border);border-radius:12px;padding:11px 13px;display:flex;align-items:center;gap:9px;cursor:grab;transition:all .15s;position:relative;user-select:none;box-shadow:0 1px 3px var(--shadow);flex-shrink:0;}
+   100→.task-item:hover{border-color:var(--border2);background:var(--surface);box-shadow:0 2px 8px var(--shadow2);transform:translateY(-1px);}
+   101→.task-item.dragging{opacity:.4;cursor:grabbing;transform:none;}
+   102→.task-item.drag-over{border-color:var(--accent);border-style:dashed;background:#fef4ee;}
+   103→.drag-handle{color:var(--text3);font-size:13px;opacity:.4;flex-shrink:0;}
+   104→.task-item:hover .drag-handle{opacity:1;}
+   105→.task-check{width:18px;height:18px;border-radius:50%;border:2px solid var(--border2);flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;}
+   106→.task-check:hover{border-color:var(--accent2);background:var(--accent2-light);}
+   107→.task-check.on{background:var(--accent2);border-color:var(--accent2);}
+   108→.task-check.on::after{content:'✓';font-size:10px;color:#fff;font-weight:700;}
+   109→.task-body{flex:1;min-width:0;}
+   110→.task-name{font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+   111→.task-status{font-size:10px;color:var(--accent);margin-top:2px;font-style:italic;font-weight:500;}
+   112→.task-meta{display:flex;align-items:center;gap:5px;flex-shrink:0;}
+   113→.attach-badge{font-size:10px;color:var(--text3);}
+   114→.open-btn{background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:3px 5px;border-radius:6px;transition:all .12s;flex-shrink:0;}
+   115→.open-btn:hover{color:var(--accent);background:var(--accent-light);}
+   116→
+   117→/* complete animation */
+   118→@keyframes completeSlide{from{opacity:1;transform:translateX(0);}to{opacity:0;transform:translateX(30px);}}
+   119→.task-item.completing{animation:completeSlide .3s ease forwards;}
+   120→
+   121→.drop-zone-hint{border:2px dashed var(--border);border-radius:10px;padding:9px;text-align:center;font-size:11px;color:var(--text3);margin-top:10px;transition:all .15s;font-style:italic;flex-shrink:0;}
+   122→.drop-zone-hint.active{border-color:var(--accent);color:var(--accent);background:#fef4ee;}
+   123→
+   124→/* WEEK STRIP */
+   125→.strip-label{font-weight:700;font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:var(--text3);}
+   126→.week-row{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;}
+   127→.week-card{min-width:140px;background:var(--surface);border:1.5px solid var(--border);border-radius:13px;padding:12px;flex-shrink:0;cursor:pointer;transition:all .15s;box-shadow:0 1px 5px var(--shadow);}
+   128→.week-card:hover{border-color:var(--border2);box-shadow:0 3px 10px var(--shadow2);transform:translateY(-1px);}
+   129→.week-card.drop-target{border-color:var(--accent)!important;background:#fef4ee;}
+   130→.week-card.is-today{border-color:var(--accent);background:#fef4ee;}
+   131→.week-card-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;}
+   132→.week-day-name{font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--text3);}
+   133→.week-day-month{font-size:8px;color:var(--text3);margin-top:1px;}
+   134→.week-day-num{font-family:'Lora',serif;font-weight:700;font-size:20px;color:var(--text);line-height:1;}
+   135→.week-pill{background:var(--surface2);border-radius:5px;padding:4px 7px;font-size:10px;color:var(--text2);margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:5px;border:1px solid var(--border);}
+   136→.week-pill.done{text-decoration:line-through;color:var(--text3);opacity:.5;}
+   137→.week-pill-dot{width:4px;height:4px;border-radius:50%;background:var(--accent);flex-shrink:0;}
+   138→.week-pill.done .week-pill-dot{background:var(--text3);}
+   139→.week-empty{font-size:10px;color:var(--text3);font-style:italic;}
+   140→
+   141→/* LOOKING FORWARD */
+   142→.lf-block{background:var(--surface);border:1.5px solid var(--border);border-radius:16px;padding:20px;box-shadow:0 2px 10px var(--shadow);position:relative;}
+   143→.lf-block::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,var(--purple),#b8a0d8);border-radius:16px 16px 0 0;}
+   144→.lf-block.drop-active{border-color:var(--purple);background:#f8f4fc;}
+   145→.lf-title{font-family:'Lora',serif;font-weight:600;font-size:17px;color:var(--text);margin-bottom:4px;}
+   146→.lf-sub{font-size:11px;color:var(--text3);font-style:italic;margin-bottom:12px;}
+   147→.lf-list{overflow-y:auto;max-height:280px;display:flex;flex-direction:column;gap:6px;margin-bottom:10px;}
+   148→.lf-list::-webkit-scrollbar{width:3px;}
+   149→.lf-list::-webkit-scrollbar-thumb{background:var(--border2);border-radius:10px;}
+   150→.lf-item{background:var(--surface2);border:1.5px solid var(--border);border-radius:10px;padding:9px 12px;display:flex;align-items:center;gap:9px;box-shadow:0 1px 3px var(--shadow);transition:all .15s;flex-shrink:0;}
+   151→.lf-item:hover{border-color:var(--border2);background:var(--surface);}
+   152→.lf-dot{width:7px;height:7px;border-radius:50%;background:var(--purple);flex-shrink:0;opacity:.6;}
+   153→.lf-name{flex:1;font-size:13px;font-weight:600;color:var(--text);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+   154→.lf-remove{background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;padding:2px 5px;border-radius:5px;transition:all .12s;}
+   155→.lf-remove:hover{color:var(--accent);background:var(--accent-light);}
+   156→.lf-drop-hint{border:2px dashed var(--border);border-radius:10px;padding:14px;text-align:center;font-size:12px;color:var(--text3);font-style:italic;transition:all .15s;}
+   157→.lf-block.drop-active .lf-drop-hint{border-color:var(--purple);color:var(--purple);background:rgba(139,111,181,.05);}
+   158→.lf-add-row{display:flex;gap:8px;margin-bottom:10px;}
+   159→.lf-add-input{flex:1;background:var(--surface2);border:1.5px solid var(--border);border-radius:20px;padding:8px 14px;font-family:'Nunito',sans-serif;font-size:13px;color:var(--text);outline:none;transition:border-color .15s;min-width:0;}
+   160→.lf-add-input::placeholder{color:var(--text3);}
+   161→.lf-add-input:focus{border-color:var(--purple);box-shadow:0 0 0 3px rgba(139,111,181,.1);}
+   162→
+   163→/* MODALS */
+   164→.overlay{position:fixed;inset:0;background:rgba(60,40,20,.45);display:flex;align-items:center;justify-content:center;z-index:200;backdrop-filter:blur(5px);padding:16px;}
+   165→.modal{background:var(--surface);border:1.5px solid var(--border);border-radius:18px;padding:26px;width:100%;max-width:500px;max-height:90dvh;overflow-y:auto;display:flex;flex-direction:column;gap:16px;animation:mIn .18s ease;box-shadow:0 8px 40px rgba(60,40,20,.18);}
+   166→@keyframes mIn{from{opacity:0;transform:scale(.95) translateY(8px);}to{opacity:1;transform:scale(1) translateY(0);}}
+   167→.modal-header{display:flex;justify-content:space-between;align-items:flex-start;}
+   168→.modal-title{font-family:'Lora',serif;font-weight:600;font-size:18px;color:var(--text);flex:1;margin-right:10px;line-height:1.3;}
+   169→.modal-close{background:var(--surface2);border:1px solid var(--border);color:var(--text3);font-size:13px;cursor:pointer;padding:4px 8px;border-radius:7px;transition:all .12s;}
+   170→.modal-close:hover{background:var(--surface3);color:var(--text);}
+   171→.field label{display:block;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:5px;font-weight:700;}
+   172→.m-input{width:100%;background:var(--surface2);border:1.5px solid var(--border);border-radius:10px;padding:9px 13px;font-family:'Nunito',sans-serif;font-size:13px;color:var(--text);outline:none;transition:border-color .15s;}
+   173→.m-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(196,92,42,.1);}
+   174→.m-input::placeholder{color:var(--text3);}
+   175→.m-textarea{width:100%;background:var(--surface2);border:1.5px solid var(--border);border-radius:10px;padding:9px 13px;font-family:'Nunito',sans-serif;font-size:13px;color:var(--text);outline:none;resize:vertical;min-height:80px;transition:border-color .15s;line-height:1.6;}
+   176→.m-textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(196,92,42,.1);}
+   177→.m-textarea::placeholder{color:var(--text3);}
+   178→.divider{height:1px;background:var(--border);}
+   179→.modal-footer{display:flex;justify-content:space-between;align-items:center;padding-top:4px;border-top:1px solid var(--border);}
+   180→.footer-right{display:flex;gap:8px;}
+   181→.trash-btn{background:none;border:1.5px solid #f0b8b8;border-radius:20px;color:#c0392b;cursor:pointer;padding:6px 12px;display:flex;align-items:center;gap:5px;font-family:'Nunito',sans-serif;font-size:12px;font-weight:600;transition:all .15s;}
+   182→.trash-btn:hover{background:#fde8e8;}
+   183→
+   184→/* ATTACHMENTS */
+   185→.file-drop{border:2px dashed var(--border2);border-radius:11px;padding:18px;text-align:center;cursor:pointer;transition:all .2s;background:var(--surface2);position:relative;}
+   186→.file-drop:hover,.file-drop.over{border-color:var(--accent);background:#fef4ee;}
+   187→.file-drop input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+   188→.file-drop-icon{font-size:20px;margin-bottom:4px;}
+   189→.file-drop-label{font-size:12px;font-weight:600;color:var(--text2);}
+   190→.file-drop-sub{font-size:10px;color:var(--text3);margin-top:2px;font-style:italic;}
+   191→.link-row{display:flex;gap:7px;}
+   192→.attach-list{display:flex;flex-direction:column;gap:5px;}
+   193→.attach-item{display:flex;align-items:center;gap:9px;background:var(--surface2);border:1.5px solid var(--border);border-radius:9px;padding:8px 11px;transition:all .12s;}
+   194→.attach-item:hover{border-color:var(--border2);background:var(--surface);}
+   195→.a-icon{width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;}
+   196→.a-icon.pdf{background:#fde8e8;}.a-icon.img{background:#e8f0e9;}.a-icon.doc{background:#e8eef8;}.a-icon.lnk{background:var(--gold-light);}.a-icon.def{background:var(--surface3);}
+   197→.a-info{flex:1;min-width:0;}
+   198→.a-name{font-size:11px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+   199→.a-meta{font-size:10px;color:var(--text3);font-style:italic;}
+   200→.a-remove{background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;padding:2px 5px;border-radius:5px;transition:all .12s;}
+   201→.a-remove:hover{color:var(--accent);background:var(--accent-light);}
+   202→
+   203→/* SYNC */
+   204→.sync-bar{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--text3);padding:4px 0;}
+   205→.sync-dot{width:6px;height:6px;border-radius:50%;background:var(--text3);flex-shrink:0;}
+   206→.sync-dot.ok{background:var(--accent2);}
+   207→.sync-dot.err{background:#c0392b;}
+   208→.sync-dot.syncing{background:var(--gold);animation:pulse 1s infinite;}
+   209→@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+   210→
+   211→/* MOBILE */
+   212→.mob-nav{display:none;}
+   213→@media(max-width:680px){
+   214→  .sidebar{display:none;}
+   215→  .main{padding:14px 12px 80px;}
+   216→  .day-block{padding:16px 14px;border-radius:14px;}
+   217→  .block-title{font-size:19px;}
+   218→  .block-sub{font-size:10px;}
+   219→  .add-input{font-size:14px;padding:10px 14px;}
+   220→  .task-item{padding:12px 11px;}
+   221→  .task-name{font-size:14px;}
+   222→  .week-card{min-width:120px;padding:10px;}
+   223→  .week-day-num{font-size:17px;}
+   224→  .lf-block{padding:16px 14px;}
+   225→  .overlay{align-items:flex-end;padding:0;}
+   226→  .modal{border-radius:18px 18px 0 0;max-height:92dvh;padding:22px 18px;padding-bottom:calc(22px + var(--safe-bottom));}
+   227→  .mob-nav{display:flex;position:fixed;bottom:0;left:0;right:0;height:calc(58px + var(--safe-bottom));padding-bottom:var(--safe-bottom);background:var(--surface);border-top:1px solid var(--border);align-items:center;justify-content:space-around;z-index:100;box-shadow:0 -2px 10px var(--shadow);}
+   228→  .mob-btn{display:flex;flex-direction:column;align-items:center;gap:2px;background:none;border:none;cursor:pointer;color:var(--text3);font-family:'Nunito',sans-serif;font-size:9px;font-weight:700;padding:6px 14px;border-radius:10px;transition:all .15s;text-transform:uppercase;letter-spacing:.6px;}
+   229→  .mob-btn.active{color:var(--accent);}
+   230→  .mob-icon{font-size:20px;line-height:1;}
+   231→}
+   232→</style>
+   233→</head>
+   234→<body>
+   235→<div id="root"></div>
+   236→<script type="text/babel">
+   237→const {useState,useEffect,useRef}=React;
+   238→const DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+   239→const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+   240→const MS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+   241→
+   242→const SUPA_URL='https://fcgebmeefugxtaddpgvi.supabase.co';
+   243→const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZjZ2VibWVlZnVneHRhZGRwZ3ZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyMzUxMTUsImV4cCI6MjA4NzgxMTExNX0.zcQfE9XnlIHqS2Atm5tTW_fVlmjX4MaaL6Y61tIXmyk';
+   244→const sb=supabase.createClient(SUPA_URL,SUPA_KEY);
+   245→
+   246→const next8=()=>Array.from({length:8},(_,i)=>{const d=new Date();d.setDate(d.getDate()+i);return d;});
+   247→const dk=d=>d.getFullYear()+'-'+d.getMonth()+'-'+d.getDate();
+   248→const uid=()=>Math.random().toString(36).slice(2);
+   249→const fIcon=n=>{if(!n)return{icon:'🔗',cls:'lnk'};const e=n.split('.').pop().toLowerCase();if(['jpg','jpeg','png','gif','webp','svg'].includes(e))return{icon:'🖼',cls:'img'};if(e==='pdf')return{icon:'📄',cls:'pdf'};if(['doc','docx','txt','md'].includes(e))return{icon:'📝',cls:'doc'};return{icon:'📎',cls:'def'};};
+   250→const fmtSize=b=>{if(!b)return'';if(b<1024)return b+' B';if(b<1048576)return(b/1024).toFixed(1)+' KB';return(b/1048576).toFixed(1)+' MB';};
+   251→
+   252→const CLIENT_ID='992169341355-40u7rg338i4jrhmrbu5hivedkvd0dqqs.apps.googleusercontent.com';
+   253→const SCOPES='https://www.googleapis.com/auth/calendar.events';
+   254→function getToken(){return new Promise((res,rej)=>{if(!window.google){rej(new Error('Google not loaded'));return;}window.google.accounts.oauth2.initTokenClient({client_id:CLIENT_ID,scope:SCOPES,callback:r=>{if(r.error)rej(new Error(r.error));else res(r.access_token);}}).requestAccessToken();});}
+   255→async function pushCal(date,tasks){
+   256→  const token=await getToken();
+   257→  const ds=`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+   258→  const list=tasks.filter(t=>!t.complete).map(t=>`• ${t.name}`).join('\n');
+   259→  const body=JSON.stringify({summary:'Task Bloc',colorId:'6',description:`TaskBloc tasks for ${ds}\n\n${list}\n\n🔗 ${window.location.href}`,start:{dateTime:`${ds}T08:00:00`,timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone},end:{dateTime:`${ds}T09:00:00`,timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone}});
+   260→  const r=await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events',{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body});
+   261→  if(!r.ok)throw new Error('Calendar API '+r.status);
+   262→  return r.json();
+   263→}
+   264→
+   265→// ── OFFLINE QUEUE ──
+   266→const QUEUE_KEY='taskbloc_queue';
+   267→function qLoad(){try{return JSON.parse(localStorage.getItem(QUEUE_KEY))||[];}catch{return[];}}
+   268→function qSave(q){localStorage.setItem(QUEUE_KEY,JSON.stringify(q));}
+   269→function qAdd(op){const q=qLoad();q.push(op);qSave(q);}
+   270→
+   271→async function qFlush(){
+   272→  if(!navigator.onLine)return;
+   273→  const q=qLoad();
+   274→  if(q.length===0)return;
+   275→  qSave([]); // optimistically clear
+   276→  try{
+   277→    await Promise.all(q.map(op=>{
+   278→      if(op.type==='upsertTask')return sb.from('tasks').upsert(op.data);
+   279→      if(op.type==='deleteTask')return sb.from('tasks').delete().eq('id',op.id);
+   280→      if(op.type==='upsertForward')return sb.from('forward_tasks').upsert(op.data);
+   281→      if(op.type==='deleteForward')return sb.from('forward_tasks').delete().eq('id',op.id);
+   282→    }));
+   283→  }catch(e){
+   284→    // restore queue if flush fails
+   285→    const remaining=qLoad();
+   286→    qSave([...q,...remaining]);
+   287→    throw e;
+   288→  }
+   289→}
+   290→
+   291→// Flush queue whenever we come back online
+   292→window.addEventListener('online',()=>qFlush().catch(console.error));
+   293→
+   294→async function dbLoadTasks(){
+   295→  if(!navigator.onLine){
+   296→    // Return cached data from localStorage if offline
+   297→    try{return JSON.parse(localStorage.getItem('taskbloc_tasks'))||{};}catch{return{};}
+   298→  }
+   299→  const{data,error}=await sb.from('tasks').select('*').order('position');
+   300→  if(error)throw error;
+   301→  const map={};(data||[]).forEach(r=>{if(!map[r.day_key])map[r.day_key]=[];map[r.day_key].push({id:r.id,name:r.name,status:r.status,context:r.context,complete:r.complete,attachments:r.attachments||[]});});
+   302→  return map;
+   303→}
+   304→async function dbLoadForward(){
+   305→  if(!navigator.onLine){
+   306→    try{return JSON.parse(localStorage.getItem('taskbloc_forward'))||[];}catch{return[];}
+   307→  }
+   308→  const{data,error}=await sb.from('forward_tasks').select('*').order('position');
+   309→  if(error)throw error;
+   310→  return(data||[]).map(r=>({id:r.id,name:r.name,status:r.status,context:r.context,complete:r.complete,attachments:r.attachments||[]}));
+   311→}
+   312→async function dbUpsertTask(task,dayKey,position){
+   313→  const data={id:task.id,day_key:dayKey,name:task.name,status:task.status,context:task.context,complete:task.complete,attachments:task.attachments,position};
+   314→  if(!navigator.onLine){qAdd({type:'upsertTask',data});return;}
+   315→  try{await sb.from('tasks').upsert(data);}catch(e){qAdd({type:'upsertTask',data});throw e;}
+   316→}
+   317→async function dbDeleteTask(id){
+   318→  if(!navigator.onLine){qAdd({type:'deleteTask',id});return;}
+   319→  try{await sb.from('tasks').delete().eq('id',id);}catch(e){qAdd({type:'deleteTask',id});throw e;}
+   320→}
+   321→async function dbUpsertForward(task,position){
+   322→  const data={id:task.id,name:task.name,status:task.status,context:task.context,complete:task.complete,attachments:task.attachments,position};
+   323→  if(!navigator.onLine){qAdd({type:'upsertForward',data});return;}
+   324→  try{await sb.from('forward_tasks').upsert(data);}catch(e){qAdd({type:'upsertForward',data});throw e;}
+   325→}
+   326→async function dbDeleteForward(id){
+   327→  if(!navigator.onLine){qAdd({type:'deleteForward',id});return;}
+   328→  try{await sb.from('forward_tasks').delete().eq('id',id);}catch(e){qAdd({type:'deleteForward',id});throw e;}
+   329→}
+   330→
+   331→function Attachments({attachments,onChange}){
+   332→  const [link,setLink]=useState('');const [over,setOver]=useState(false);
+   333→  const addFiles=fs=>{const n=Array.from(fs).map(f=>({id:uid(),name:f.name,size:f.size,type:'file',url:null}));onChange([...attachments,...n]);};
+   334→  const addLink=()=>{if(!link.trim())return;const url=link.trim();onChange([...attachments,{id:uid(),name:url.replace(/^https?:\/\//,'').split('/')[0],url,type:'link',size:null}]);setLink('');};
+   335→  const remove=id=>onChange(attachments.filter(a=>a.id!==id));
+   336→  return(<div style={{display:'flex',flexDirection:'column',gap:'9px'}}>
+   337→    <div className={'file-drop'+(over?' over':'')} onDragOver={e=>{e.preventDefault();setOver(true);}} onDragLeave={()=>setOver(false)} onDrop={e=>{e.preventDefault();setOver(false);addFiles(e.dataTransfer.files);}}>
+   338→      <input type="file" multiple onChange={e=>addFiles(e.target.files)}/><div className="file-drop-icon">📁</div><div className="file-drop-label">Drop files or tap to browse</div><div className="file-drop-sub">Syncs once storage connected</div>
+   339→    </div>
+   340→    <div className="link-row"><input className="m-input" placeholder="Paste a link (Drive, Notion, Dropbox…)" value={link} onChange={e=>setLink(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addLink()}/><button className="btn sm" onClick={addLink}>Add</button></div>
+   341→    {attachments.length>0&&<div className="attach-list">{attachments.map(a=>{const{icon,cls}=a.type==='link'?{icon:'🔗',cls:'lnk'}:fIcon(a.name);return(<div key={a.id} className="attach-item"><div className={'a-icon '+cls}>{icon}</div><div className="a-info"><div className="a-name">{a.name}</div><div className="a-meta">{a.type==='link'?a.url:fmtSize(a.size)+' · pending'}</div></div><button className="a-remove" onClick={()=>remove(a.id)}>✕</button></div>);})}</div>}
+   342→  </div>);
+   343→}
+   344→
+   345→function TaskModal({task,onClose,onSave,onDelete}){
+   346→  const [name,setName]=useState(task.name);const [status,setStatus]=useState(task.status);const [context,setContext]=useState(task.context);const [attachments,setAttachments]=useState(task.attachments||[]);const [confirming,setConfirming]=useState(false);
+   347→  if(confirming)return(<div className="overlay" onClick={e=>e.target===e.currentTarget&&setConfirming(false)}><div className="modal" style={{maxWidth:360}}><div className="modal-header"><div className="modal-title">Delete this task?</div><button className="modal-close" onClick={()=>setConfirming(false)}>✕</button></div><p style={{fontSize:'13px',color:'var(--text2)',lineHeight:1.6}}><strong style={{color:'var(--text)'}}>{task.name}</strong> will be permanently removed.</p><div className="modal-footer"><div/><div className="footer-right"><button className="btn" onClick={()=>setConfirming(false)}>Cancel</button><button className="btn danger" onClick={onDelete}>Delete</button></div></div></div></div>);
+   348→  return(<div className="overlay" onClick={e=>e.target===e.currentTarget&&onClose()}><div className="modal"><div className="modal-header"><div className="modal-title">{name||'Untitled'}</div><button className="modal-close" onClick={onClose}>✕</button></div><div className="field"><label>Task Name</label><input className="m-input" value={name} onChange={e=>setName(e.target.value)} placeholder="What needs doing?"/></div><div className="field"><label>Status</label><input className="m-input" value={status} onChange={e=>setStatus(e.target.value)} placeholder="in progress, waiting on, blocked…"/></div><div className="field"><label>Context & Notes</label><textarea className="m-textarea" value={context} onChange={e=>setContext(e.target.value)} placeholder="Notes, links, context…"/></div><div className="divider"/><div className="field"><label>Attachments{attachments.length>0?' · '+attachments.length:''}</label><Attachments attachments={attachments} onChange={setAttachments}/></div><div className="modal-footer"><button className="trash-btn" onClick={()=>setConfirming(true)}>🗑 Delete</button><div className="footer-right"><button className="btn" onClick={onClose}>Cancel</button><button className="btn primary" onClick={()=>{onSave({...task,name,status,context,attachments});onClose();}}>Save</button></div></div></div></div>);
+   349→}
+   350→
+   351→/* DONE BADGES COMPONENT */
+   352→function DoneBadges({tasks}){
+   353→  const [open,setOpen]=useState(false);
+   354→  const done=tasks.filter(t=>t.complete);
+   355→  if(done.length===0)return null;
+   356→  const visible=done.slice(0,5);
+   357→  return(
+   358→    <div style={{position:'relative',display:'inline-block'}}>
+   359→      <div className="done-badges" onClick={()=>setOpen(o=>!o)}>
+   360→        {visible.map((_,i)=><div key={i} className="done-badge">✓</div>)}
+   361→        {done.length>5&&<div className="done-badge" style={{background:'var(--text3)',fontSize:'8px'}}>+{done.length-5}</div>}
+   362→      </div>
+   363→      {open&&(
+   364→        <div className="done-bubble">
+   365→          <div className="done-bubble-title">Completed today</div>
+   366→          {done.map(t=>(
+   367→            <div key={t.id} className="done-bubble-item">
+   368→              <div className="done-bubble-check">✓</div>
+   369→              <span style={{flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.name}</span>
+   370→            </div>
+   371→          ))}
+   372→          <span className="done-bubble-close" onClick={()=>setOpen(false)}>close</span>
+   373→        </div>
+   374→      )}
+   375→    </div>
+   376→  );
+   377→}
+   378→
+   379→function TaskItem({task,onToggle,onOpen,onDragStart,onDragOver,onDrop,isDragging,isDragOver}){
+   380→  const [completing,setCompleting]=useState(false);
+   381→  const handleToggle=()=>{
+   382→    if(!task.complete){setCompleting(true);setTimeout(()=>{onToggle(task.id);setCompleting(false);},280);}
+   383→    else onToggle(task.id);
+   384→  };
+   385→  return(<div className={'task-item'+(isDragging?' dragging':'')+(isDragOver?' drag-over':'')+(completing?' completing':'')} draggable onDragStart={e=>onDragStart(e,task.id)} onDragOver={e=>{e.preventDefault();onDragOver(task.id);}} onDrop={e=>{e.preventDefault();onDrop(task.id);}}>
+   386→    <span className="drag-handle">⠿</span>
+   387→    <div className={'task-check'+(task.complete?' on':'')} onClick={handleToggle}/>
+   388→    <div className="task-body"><div className="task-name">{task.name}</div>{task.status&&<div className="task-status">{task.status}</div>}</div>
+   389→    <div className="task-meta">{(task.attachments||[]).length>0&&<span className="attach-badge">📎{task.attachments.length}</span>}<button className="open-btn" onClick={()=>onOpen(task)}>↗</button></div>
+   390→  </div>);
+   391→}
+   392→
+   393→function DayBlock({date,tasks,isToday,onAdd,onToggle,onOpen,onUpdateTasks,onMoveTask,onSendCal}){
+   394→  const [newName,setNewName]=useState('');const [dragOver,setDragOver]=useState(null);const [draggingId,setDraggingId]=useState(null);const [zoneActive,setZoneActive]=useState(false);const [calStatus,setCalStatus]=useState('idle');
+   395→  const key=dk(date);
+   396→  const hDragStart=(e,id)=>{setDraggingId(id);e.dataTransfer.setData('taskId',id);e.dataTransfer.setData('fromDay',key);};
+   397→  const hDrop=tid=>{if(!draggingId||draggingId===tid){setDraggingId(null);setDragOver(null);return;}const fi=tasks.findIndex(t=>t.id===draggingId),ti=tasks.findIndex(t=>t.id===tid);if(fi===-1||ti===-1)return;const arr=[...tasks];const[m]=arr.splice(fi,1);arr.splice(ti,0,m);onUpdateTasks(key,arr);setDraggingId(null);setDragOver(null);};
+   398→  const hZoneDrop=e=>{e.preventDefault();const tid=e.dataTransfer.getData('taskId'),fd=e.dataTransfer.getData('fromDay');if(fd&&fd!==key)onMoveTask(fd,key,tid);setZoneActive(false);};
+   399→  const add=()=>{if(!newName.trim())return;onAdd(key,newName.trim());setNewName('');};
+   400→  const sendCal=async()=>{
+   401→    setCalStatus('sending');
+   402→    try{await pushCal(date,tasks);setCalStatus('sent');setTimeout(()=>setCalStatus('idle'),3000);}
+   403→    catch(e){setCalStatus('error');setTimeout(()=>setCalStatus('idle'),3000);}
+   404→  };
+   405→  const inc=tasks.filter(t=>!t.complete);
+   406→  const calLabel=calStatus==='sending'?'sending…':calStatus==='sent'?'sent ✓':calStatus==='error'?'error':'send to calendar';
+   407→  return(
+   408→    <div className="day-block">
+   409→      <div className="block-header">
+   410→        <div>
+   411→          <div className="block-title-row">
+   412→            <div className="block-title">{isToday?'Today':DAYS[date.getDay()]}</div>
+   413→            <DoneBadges tasks={tasks}/>
+   414→          </div>
+   415→          <div className="block-sub">{DAYS[date.getDay()]}, {MONTHS[date.getMonth()]} {date.getDate()}{inc.length>0&&' · '+inc.length+' open'}</div>
+   416→        </div>
+   417→        <button className={'btn gold'+(calStatus==='sent'?' primary':'')} onClick={sendCal} disabled={calStatus==='sending'} style={calStatus==='sent'?{background:'var(--accent2)',borderColor:'var(--accent2)',color:'#fff'}:{}}>{calLabel}</button>
+   418→      </div>
+   419→      <div className="add-row"><input className="add-input" placeholder="Add a task…" value={newName} onChange={e=>setNewName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&add()}/><button className="btn primary" onClick={add}>Add</button></div>
+   420→      <div className="task-list-wrap">
+   421→        {tasks.filter(t=>!t.complete).length===0&&tasks.filter(t=>t.complete).length===0&&<div style={{fontSize:'12px',color:'var(--text3)',fontStyle:'italic',padding:'6px 2px'}}>Nothing here yet.</div>}
+   422→        {inc.map(t=><TaskItem key={t.id} task={t} onToggle={id=>onToggle(key,id)} onOpen={onOpen} onDragStart={hDragStart} onDragOver={setDragOver} onDrop={hDrop} isDragging={draggingId===t.id} isDragOver={dragOver===t.id}/>)}
+   423→      </div>
+   424→      <div className={'drop-zone-hint'+(zoneActive?' active':'')} onDragOver={e=>{e.preventDefault();setZoneActive(true);}} onDragLeave={()=>setZoneActive(false)} onDrop={hZoneDrop}>drag a task here from another day</div>
+   425→    </div>
+   426→  );
+   427→}
+   428→
+   429→function LookingForward({items,onDrop,onRemove,onOpen,onAdd}){
+   430→  const [active,setActive]=useState(false);
+   431→  const [newName,setNewName]=useState('');
+   432→  const hDrop=e=>{e.preventDefault();const tid=e.dataTransfer.getData('taskId'),fd=e.dataTransfer.getData('fromDay');if(tid&&fd)onDrop(fd,tid);setActive(false);};
+   433→  const add=()=>{if(!newName.trim())return;onAdd(newName.trim());setNewName('');};
+   434→  return(<div className={'lf-block'+(active?' drop-active':'')} onDragOver={e=>{e.preventDefault();setActive(true);}} onDragLeave={()=>setActive(false)} onDrop={hDrop}>
+   435→    <div className="lf-title">Looking Forward</div>
+   436→    <div className="lf-sub">Tasks beyond this week.</div>
+   437→    <div className="lf-add-row">
+   438→      <input className="lf-add-input" placeholder="Add a future task…" value={newName} onChange={e=>setNewName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&add()}/>
+   439→      <button className="btn sm purple" onClick={add}>Add</button>
+   440→    </div>
+   441→    {items.length>0&&<div className="lf-list">{items.map(t=>(<div key={t.id} className="lf-item"><span className="lf-dot"/><span className="lf-name">{t.name}</span>{t.status&&<span style={{fontSize:'10px',color:'var(--purple)',fontStyle:'italic',flexShrink:0}}>{t.status}</span>}{(t.attachments||[]).length>0&&<span style={{fontSize:'10px',color:'var(--text3)',flexShrink:0}}>📎{t.attachments.length}</span>}<button className="open-btn" style={{flexShrink:0}} onClick={()=>onOpen(t)}>↗</button><button className="lf-remove" onClick={()=>onRemove(t.id)}>✕</button></div>))}</div>}
+   442→    <div className="lf-drop-hint">{items.length===0?'Drop tasks here to save for later':'Drop more tasks here'}</div>
+   443→  </div>);
+   444→}
+   445→
+   446→function SyncStatus({status}){
+   447→  const [online,setOnline]=React.useState(navigator.onLine);
+   448→  React.useEffect(()=>{
+   449→    const on=()=>setOnline(true);
+   450→    const off=()=>setOnline(false);
+   451→    window.addEventListener('online',on);
+   452→    window.addEventListener('offline',off);
+   453→    return()=>{window.removeEventListener('online',on);window.removeEventListener('offline',off);};
+   454→  },[]);
+   455→  if(!online)return(<div className="sync-bar"><div className="sync-dot err"/><span>offline — changes will sync when reconnected</span></div>);
+   456→  const cls=status==='ok'?'ok':status==='error'?'err':status==='syncing'?'syncing':'';
+   457→  const label=status==='ok'?'synced':status==='error'?'sync error':status==='syncing'?'syncing…':'connecting…';
+   458→  return(<div className="sync-bar"><div className={'sync-dot '+cls}/><span>{label}</span></div>);
+   459→}
+   460→
+   461→function App(){
+   462→  const days=next8();
+   463→  const [tasks,setTasks]=useState({});
+   464→  const [forward,setForward]=useState([]);
+   465→  const [sel,setSel]=useState(0);
+   466→  const [editing,setEditing]=useState(null);
+   467→  const [editFwd,setEditFwd]=useState(null);
+   468→  const [mobTab,setMobTab]=useState('today');
+   469→  const [syncStatus,setSyncStatus]=useState('loading');
+   470→  const saveTimer=useRef(null);
+   471→  const mainRef=useRef(null);
+   472→
+   473→  useEffect(()=>{(async()=>{try{const[t,f]=await Promise.all([dbLoadTasks(),dbLoadForward()]);setTasks(t);setForward(f);setSyncStatus('ok');}catch(e){console.error(e);setSyncStatus('error');}})();},[]);
+   474→
+   475→  const scheduleSave=(tasksObj,fwdArr)=>{
+   476→    if(saveTimer.current)clearTimeout(saveTimer.current);
+   477→    setSyncStatus('syncing');
+   478→    saveTimer.current=setTimeout(async()=>{try{const ops=[];Object.entries(tasksObj).forEach(([dayKey,ts])=>{ts.forEach((t,i)=>ops.push(dbUpsertTask(t,dayKey,i)));});fwdArr.forEach((t,i)=>ops.push(dbUpsertForward(t,i)));await Promise.all(ops);setSyncStatus('ok');}catch(e){console.error(e);setSyncStatus('error');}},800);
+   479→  };
+   480→
+   481→  const addTask=(k,n)=>{const task={id:uid(),name:n,status:'',context:'',complete:false,attachments:[]};setTasks(prev=>{const next={...prev,[k]:[...(prev[k]||[]),task]};scheduleSave(next,forward);return next;});};
+   482→  const toggleTask=(k,id)=>setTasks(p=>{const next={...p,[k]:(p[k]||[]).map(t=>t.id===id?{...t,complete:!t.complete}:t)};scheduleSave(next,forward);return next;});
+   483→  const saveTask=(k,u)=>setTasks(p=>{const next={...p,[k]:(p[k]||[]).map(t=>t.id===u.id?u:t)};scheduleSave(next,forward);return next;});
+   484→  const updTasks=(k,a)=>setTasks(p=>{const next={...p,[k]:a};scheduleSave(next,forward);return next;});
+   485→  const delTask=(k,id)=>{dbDeleteTask(id);setTasks(p=>{const next={...p,[k]:(p[k]||[]).filter(t=>t.id!==id)};scheduleSave(next,forward);return next;});setEditing(null);};
+   486→  const movTask=(f,t,id)=>setTasks(p=>{const task=(p[f]||[]).find(x=>x.id===id);if(!task)return p;const next={...p,[f]:(p[f]||[]).filter(x=>x.id!==id),[t]:[...(p[t]||[]),task]};scheduleSave(next,forward);return next;});
+   487→  const moveToFwd=(fd,id)=>{const task=(tasks[fd]||[]).find(t=>t.id===id);if(!task)return;setTasks(prev=>{const next={...prev,[fd]:(prev[fd]||[]).filter(t=>t.id!==id)};const nf=[...forward,task];scheduleSave(next,nf);setForward(nf);return next;});};
+   488→  const addFwd=n=>{const task={id:uid(),name:n,status:'',context:'',complete:false,attachments:[]};setForward(prev=>{const next=[...prev,task];scheduleSave(tasks,next);return next;});};
+   489→  const remFwd=id=>{dbDeleteForward(id);setForward(p=>{const next=p.filter(t=>t.id!==id);scheduleSave(tasks,next);return next;});};
+   490→  const saveFwd=u=>setForward(p=>{const next=p.map(t=>t.id===u.id?u:t);scheduleSave(tasks,next);return next;});
+   491→  const delFwd=id=>{dbDeleteForward(id);setForward(p=>{const next=p.filter(t=>t.id!==id);scheduleSave(tasks,next);return next;});setEditFwd(null);};
+   492→
+   493→  const selectDay=(i)=>{
+   494→    setSel(i);
+   495→    setMobTab('today');
+   496→    // scroll main back to top
+   497→    if(mainRef.current)mainRef.current.scrollTo({top:0,behavior:'smooth'});
+   498→  };
+   499→
+   500→  const cur=days[sel],ck=dk(cur),ct=tasks[ck]||[];
+   501→
+   502→  const sidebarDays=days.map((d,i)=>{const k=dk(d),count=(tasks[k]||[]).length,done=(tasks[k]||[]).filter(t=>t.complete).length;return(
+   503→    <div key={k} className={'s-day'+(i===0?' today':'')+(sel===i?' active':'')} onClick={()=>selectDay(i)}>
+   504→      <div className="s-day-label">{i===0?'Today':DAYS[d.getDay()]}</div>
+   505→      <div className="s-day-date">{MS[d.getMonth()]} {d.getDate()}</div>
+   506→      {count>0&&<div className="s-day-count">{done}/{count} complete</div>}
+   507→    </div>
+   508→  );});
+   509→
+   510→  const weekStrip=(<div style={{display:'flex',flexDirection:'column',gap:'10px'}}>
+   511→    <div className="strip-label">Coming Up</div>
+   512→    <div className="week-row">
+   513→      {/* Today card first so you can scroll back */}
+   514→      <div className={'week-card'+(sel===0?' is-today':'')} onClick={()=>selectDay(0)}>
+   515→        <div className="week-card-header"><div><div className="week-day-name">Today</div><div className="week-day-month">{MS[days[0].getMonth()]}</div></div><div className="week-day-num">{days[0].getDate()}</div></div>
+   516→        {(tasks[dk(days[0])]||[]).filter(t=>!t.complete).length===0?<div className="week-empty">{(tasks[dk(days[0])]||[]).length>0?'all done':'clear'}</div>:(tasks[dk(days[0])]||[]).filter(t=>!t.complete).map(t=><div key={t.id} className="week-pill"><span className="week-pill-dot"/>{t.name}</div>)}
+   517→      </div>
+   518→      {days.slice(1).map((d,i)=>{const k=dk(d),dt=tasks[k]||[];return(
+   519→        <div key={k} className={'week-card'+(sel===i+1?' is-today':'')} onClick={()=>selectDay(i+1)}
+   520→          onDragOver={e=>{e.preventDefault();e.currentTarget.classList.add('drop-target');}}
+   521→          onDragLeave={e=>e.currentTarget.classList.remove('drop-target')}
+   522→          onDrop={e=>{e.preventDefault();e.currentTarget.classList.remove('drop-target');const tid=e.dataTransfer.getData('taskId'),fd=e.dataTransfer.getData('fromDay');if(fd&&fd!==k)movTask(fd,k,tid);}}>
+   523→          <div className="week-card-header"><div><div className="week-day-name">{DAYS[d.getDay()]}</div><div className="week-day-month">{MS[d.getMonth()]}</div></div><div className="week-day-num">{d.getDate()}</div></div>
+   524→          {dt.filter(t=>!t.complete).length===0?<div className="week-empty">{dt.length>0?'all done':'clear'}</div>:dt.filter(t=>!t.complete).map(t=><div key={t.id} className="week-pill"><span className="week-pill-dot"/>{t.name}</div>)}
+   525→        </div>
+   526→      );})}
+   527→    </div>
+   528→  </div>);
+   529→
+   530→  return(<div className="app">
+   531→    <div className="sidebar">
+   532→      <div className="sidebar-logo">TaskBloc</div>
+   533→      <div className="sidebar-sub">your days, organized</div>
+   534→      <SyncStatus status={syncStatus}/>
+   535→      <div className="sidebar-section">This Week</div>
+   536→      {sidebarDays}
+   537→      {forward.length>0&&<><div className="sidebar-section" style={{color:'var(--purple)'}}>Looking Forward</div><div className="s-day" style={{cursor:'default'}}><div className="s-day-count" style={{color:'var(--purple)',fontSize:'10px'}}>{forward.length} task{forward.length!==1?'s':''} parked</div></div></>}
+   538→    </div>
+   539→
+   540→    <div className="main" ref={mainRef}>
+   541→      {mobTab==='today'&&<>
+   542→        <SyncStatus status={syncStatus}/>
+   543→        <DayBlock date={cur} tasks={ct} isToday={sel===0} onAdd={addTask} onToggle={toggleTask} onOpen={t=>setEditing({task:t,dayKey:ck})} onUpdateTasks={updTasks} onMoveTask={movTask}/>
+   544→        {weekStrip}
+   545→        <LookingForward items={forward} onDrop={moveToFwd} onRemove={remFwd} onOpen={t=>setEditFwd(t)} onAdd={addFwd}/>
+   546→      </>}
+   547→      {mobTab==='days'&&<><div className="sidebar-section" style={{fontSize:'11px',paddingLeft:0}}>This Week</div><div style={{display:'flex',flexDirection:'column',gap:'8px'}}>{sidebarDays}</div></>}
+   548→      {mobTab==='forward'&&<LookingForward items={forward} onDrop={moveToFwd} onRemove={remFwd} onOpen={t=>setEditFwd(t)} onAdd={addFwd}/>}
+   549→    </div>
+   550→
+   551→    <nav className="mob-nav">
+   552→      <button className={'mob-btn'+(mobTab==='today'?' active':'')} onClick={()=>setMobTab('today')}><span className="mob-icon">📋</span>Today</button>
+   553→      <button className={'mob-btn'+(mobTab==='days'?' active':'')} onClick={()=>setMobTab('days')}><span className="mob-icon">📅</span>Days</button>
+   554→      <button className={'mob-btn'+(mobTab==='forward'?' active':'')} onClick={()=>setMobTab('forward')}><span className="mob-icon">🔭</span>Forward</button>
+   555→    </nav>
+   556→
+   557→    {editing&&<TaskModal task={editing.task} onClose={()=>setEditing(null)} onSave={u=>{saveTask(editing.dayKey,u);setEditing(null);}} onDelete={()=>delTask(editing.dayKey,editing.task.id)}/>}
+   558→    {editFwd&&<TaskModal task={editFwd} onClose={()=>setEditFwd(null)} onSave={u=>{saveFwd(u);setEditFwd(null);}} onDelete={()=>delFwd(editFwd.id)}/>}
+   559→  </div>);
+   560→}
+   561→
+   562→ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+   563→
+   564→if ('serviceWorker' in navigator) {
+   565→  window.addEventListener('load', () => {
+   566→    navigator.serviceWorker.register('/TaskBloc/sw.js')
+   567→      .then(r => console.log('SW registered:', r.scope))
+   568→      .catch(e => console.log('SW failed:', e));
+   569→  });
+   570→}
+   571→</script>
+   572→</body>
+   573→</html>
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

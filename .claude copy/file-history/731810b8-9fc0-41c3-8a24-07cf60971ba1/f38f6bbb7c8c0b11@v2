@@ -1,0 +1,45 @@
+import { NextRequest } from 'next/server'
+import { supabase } from '@/lib/supabase'
+import { buildSchedule } from '@/lib/scheduling'
+import type { Book, PriorityItem } from '@/types'
+
+export async function GET() {
+  const { data, error } = await supabase
+    .from('books')
+    .select('*')
+    .order('created_at', { ascending: false })
+  if (error) return Response.json({ error: error.message }, { status: 500 })
+  return Response.json(data)
+}
+
+export async function POST(req: NextRequest) {
+  const body = await req.json()
+  const { title, current_page = 0, total_pages, sessions_per_week = 3 } = body
+
+  if (!title || !total_pages) {
+    return Response.json({ error: 'title and total_pages are required' }, { status: 400 })
+  }
+
+  // Insert book
+  const { data: book, error: bookError } = await supabase
+    .from('books')
+    .insert({ title, current_page, total_pages, sessions_per_week, status: 'active' })
+    .select()
+    .single()
+  if (bookError) return Response.json({ error: bookError.message }, { status: 500 })
+
+  // Fetch existing priority items to block dates
+  const { data: priorities } = await supabase
+    .from('priority_items')
+    .select('*')
+    .eq('is_completed', false)
+
+  // Generate and insert sessions
+  const sessionRows = buildSchedule(book as Book, (priorities ?? []) as PriorityItem[])
+  if (sessionRows.length > 0) {
+    const { error: sessionsError } = await supabase.from('sessions').insert(sessionRows)
+    if (sessionsError) return Response.json({ error: sessionsError.message }, { status: 500 })
+  }
+
+  return Response.json({ book, sessionCount: sessionRows.length }, { status: 201 })
+}

@@ -1,0 +1,785 @@
+'use client'
+
+import { Suspense, useState, useEffect, useCallback } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { format, parseISO } from 'date-fns'
+import { supabase } from '@/lib/supabase'
+import {
+  DndContext,
+  closestCenter,
+  DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
+  PointerSensor,
+  useDroppable,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import AddItemModal from '@/components/AddItemModal'
+import DetailModal from '@/components/DetailModal'
+import GlobalSearch from '@/components/GlobalSearch'
+import type { Book } from '@/types'
+
+const READING_SECTION = '__reading-now__'
+const QUEUE_SECTION = '__next-up__'
+
+// ── Drag handle ────────────────────────────────────────────────────────────────
+
+function DragHandle() {
+  return (
+    <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor">
+      <circle cx="4" cy="3" r="1.5" />
+      <circle cx="8" cy="3" r="1.5" />
+      <circle cx="4" cy="8" r="1.5" />
+      <circle cx="8" cy="8" r="1.5" />
+      <circle cx="4" cy="13" r="1.5" />
+      <circle cx="8" cy="13" r="1.5" />
+    </svg>
+  )
+}
+
+// ── Complete check button ──────────────────────────────────────────────────────
+
+function CompleteButton({ onClick, loading = false }: { onClick: () => void; loading?: boolean }) {
+  return (
+    <button
+      onClick={e => { e.stopPropagation(); onClick() }}
+      disabled={loading}
+      className="w-7 h-7 flex items-center justify-center rounded-full text-fog-400 hover:text-white hover:bg-navy-700 transition-all disabled:opacity-40 shrink-0"
+      title="Mark complete"
+    >
+      {loading ? (
+        <span className="text-[10px]">…</span>
+      ) : (
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+          <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd" />
+        </svg>
+      )}
+    </button>
+  )
+}
+
+// ── Sortable book row (Reading Now / Next Up) ──────────────────────────────────
+
+function SortableBookRow({
+  book,
+  onOpenDetail,
+  onComplete,
+  onMoveUp,
+}: {
+  book: Book
+  onOpenDetail: () => void
+  onComplete: (book: Book) => void
+  onMoveUp?: () => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: book.id,
+  })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.3 : 1,
+  }
+
+  const pct = book.total_pages && book.total_pages > 0
+    ? Math.round(((book.current_page ?? 0) / book.total_pages) * 100)
+    : 0
+  const isQueued = book.status === 'queued' || book.status === 'paused'
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="bg-white rounded-xl border border-fog-300 shadow-sm hover:border-fog-400 hover:shadow-md transition-all flex items-center gap-3 px-3 py-3"
+    >
+      {/* Drag handle */}
+      <button
+        {...attributes}
+        {...listeners}
+        className="text-fog-300 hover:text-fog-500 cursor-grab active:cursor-grabbing shrink-0 touch-none transition-colors"
+        aria-label="Drag to reorder"
+      >
+        <DragHandle />
+      </button>
+
+      {/* Clickable content */}
+      <button
+        onClick={onOpenDetail}
+        className="flex-1 min-w-0 text-left"
+      >
+        <p className="font-medium text-navy-900 truncate text-sm leading-snug">{book.title}</p>
+        {book.author && (
+          <p className="text-xs text-fog-500 mt-0.5 truncate">{book.author}</p>
+        )}
+        {!isQueued && book.total_pages && book.total_pages > 0 && (
+          <div className="flex items-center gap-2 mt-1.5">
+            <div className="w-28 bg-fog-200 rounded-full h-1.5">
+              <div
+                className="bg-[#2d6a4f] h-1.5 rounded-full transition-all"
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+            <span className="text-xs text-fog-400">
+              p.{book.current_page ?? 0}/{book.total_pages}
+            </span>
+          </div>
+        )}
+      </button>
+
+      {/* Action */}
+      {onMoveUp ? (
+        <button
+          onClick={e => { e.stopPropagation(); onMoveUp() }}
+          className="text-xs text-fog-500 hover:text-navy-700 px-2.5 py-1 rounded-full bg-fog-100 hover:bg-navy-100 transition-all shrink-0"
+        >
+          Start
+        </button>
+      ) : (
+        <CompleteButton onClick={() => onComplete(book)} />
+      )}
+    </div>
+  )
+}
+
+// ── Drag overlay ───────────────────────────────────────────────────────────────
+
+function BookDragOverlay({ book }: { book: Book }) {
+  return (
+    <div className="bg-white rounded-xl border border-navy-200 shadow-[0_12px_40px_rgba(14,30,53,0.15)] px-3 py-3 flex items-center gap-3 cursor-grabbing opacity-95">
+      <div className="text-fog-300">
+        <DragHandle />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="font-medium text-navy-900 truncate text-sm">{book.title}</p>
+        {book.author && <p className="text-xs text-fog-500 mt-0.5">{book.author}</p>}
+      </div>
+    </div>
+  )
+}
+
+// ── Droppable section ──────────────────────────────────────────────────────────
+
+function DroppableSection({
+  id,
+  children,
+  className = '',
+}: {
+  id: string
+  children: React.ReactNode
+  className?: string
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id })
+  return (
+    <div
+      ref={setNodeRef}
+      className={`${className} rounded-xl transition-all ${isOver ? 'ring-2 ring-navy-300/40' : ''}`}
+    >
+      {children}
+    </div>
+  )
+}
+
+// ── Article card ───────────────────────────────────────────────────────────────
+
+function ArticleCard({
+  book,
+  onOpenDetail,
+  onDone,
+}: {
+  book: Book
+  onOpenDetail: () => void
+  onDone: () => void
+}) {
+  const [loading, setLoading] = useState(false)
+
+  async function handleDone() {
+    setLoading(true)
+    await onDone()
+    setLoading(false)
+  }
+
+  const meta = [book.publication, book.article_date].filter(Boolean).join(' · ')
+
+  return (
+    <div className="bg-white rounded-xl border border-fog-300 shadow-sm hover:border-fog-400 hover:shadow-md transition-all flex items-center gap-3 px-4 py-3">
+      <button onClick={onOpenDetail} className="flex-1 min-w-0 text-left">
+        <p className="font-medium text-navy-900 truncate text-sm leading-snug">{book.title}</p>
+        <p className="text-xs text-fog-500 mt-0.5 truncate">
+          {[book.author, meta].filter(Boolean).join(' · ') || <span className="italic opacity-60">Article</span>}
+        </p>
+      </button>
+      <CompleteButton onClick={handleDone} loading={loading} />
+    </div>
+  )
+}
+
+// ── Podcast card ───────────────────────────────────────────────────────────────
+
+function PodcastCard({
+  book,
+  onOpenDetail,
+  onDone,
+}: {
+  book: Book
+  onOpenDetail: () => void
+  onDone: () => void
+}) {
+  const [loading, setLoading] = useState(false)
+
+  async function handleDone() {
+    setLoading(true)
+    await onDone()
+    setLoading(false)
+  }
+
+  const meta = [book.show_title, book.air_date].filter(Boolean).join(' · ')
+
+  return (
+    <div className="bg-white rounded-xl border border-fog-300 shadow-sm hover:border-fog-400 hover:shadow-md transition-all flex items-center gap-3 px-4 py-3">
+      <button onClick={onOpenDetail} className="flex-1 min-w-0 text-left">
+        <p className="font-medium text-navy-900 truncate text-sm leading-snug">{book.title}</p>
+        <p className="text-xs text-fog-500 mt-0.5 truncate">
+          {meta || <span className="italic opacity-60">Podcast</span>}
+        </p>
+      </button>
+      <CompleteButton onClick={handleDone} loading={loading} />
+    </div>
+  )
+}
+
+// ── Confirm complete modal ─────────────────────────────────────────────────────
+
+function ConfirmCompleteModal({
+  book,
+  onClose,
+  onConfirm,
+}: {
+  book: Book
+  onClose: () => void
+  onConfirm: () => void
+}) {
+  const [loading, setLoading] = useState(false)
+
+  async function handleConfirm() {
+    setLoading(true)
+    await onConfirm()
+    setLoading(false)
+  }
+
+  return (
+    <div
+      className="fixed inset-0 bg-navy-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div className="bg-white rounded-2xl shadow-[0_24px_80px_rgba(14,30,53,0.2)] w-full max-w-sm p-6">
+        <h2 className="font-semibold text-navy-900 mb-2">Finish &ldquo;{book.title}&rdquo;?</h2>
+        <p className="text-sm text-fog-600 leading-relaxed">
+          This will mark the book as completed and move it to your finished list.
+        </p>
+        <div className="flex gap-3 mt-5">
+          <button
+            onClick={onClose}
+            className="flex-1 bg-fog-100 hover:bg-fog-200 text-navy-700 px-4 py-2.5 rounded-full text-sm font-medium transition-all"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={loading}
+            className="flex-1 bg-navy-700 hover:bg-navy-800 text-white px-4 py-2.5 rounded-full text-sm font-semibold transition-all disabled:opacity-50"
+          >
+            {loading ? 'Finishing…' : 'Yes, finish it'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Completed section ──────────────────────────────────────────────────────────
+
+function CompletedSection({
+  title,
+  items,
+  onOpenDetail,
+}: {
+  title: string
+  items: Book[]
+  onOpenDetail: (book: Book) => void
+}) {
+  const [showAll, setShowAll] = useState(false)
+  const sorted = [...items].sort((a, b) =>
+    (b.date_finished ?? b.created_at ?? '').localeCompare(a.date_finished ?? a.created_at ?? '')
+  )
+  const visible = showAll ? sorted : sorted.slice(0, 3)
+  const hidden = sorted.length - 3
+
+  return (
+    <section>
+      <h2 className="text-[11px] font-bold uppercase tracking-widest text-[#cc5500] mb-3">
+        {title}
+      </h2>
+      <div className="space-y-1.5">
+        {visible.map(book => (
+          <button
+            key={book.id}
+            onClick={() => onOpenDetail(book)}
+            className="w-full text-left bg-white rounded-xl border border-fog-300 shadow-sm px-4 py-3 flex items-center gap-3 hover:border-fog-400 hover:shadow-md transition-all group"
+          >
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-navy-800 truncate group-hover:text-navy-900">
+                {book.title}
+              </p>
+              {book.author && (
+                <p className="text-xs text-fog-400 mt-0.5 truncate">{book.author}</p>
+              )}
+            </div>
+            {book.date_finished && (
+              <span className="text-xs text-fog-400 shrink-0">
+                {format(parseISO(book.date_finished), 'MMM d, yyyy')}
+              </span>
+            )}
+            <span className="text-xs text-ember-600 font-medium shrink-0">✓</span>
+          </button>
+        ))}
+
+        {hidden > 0 && (
+          <button
+            onClick={() => setShowAll(s => !s)}
+            className="w-full text-center text-xs text-fog-500 hover:text-navy-600 py-2 transition-colors"
+          >
+            {showAll ? 'Show less' : `Show ${hidden} more`}
+          </button>
+        )}
+      </div>
+    </section>
+  )
+}
+
+// ── Section header ─────────────────────────────────────────────────────────────
+
+function SectionHeader({ children }: { children: React.ReactNode }) {
+  return (
+    <h2 className="text-[11px] font-bold uppercase tracking-widest text-[#cc5500] mb-3">
+      {children}
+    </h2>
+  )
+}
+
+// ── Dashboard content (uses useSearchParams) ───────────────────────────────────
+
+function DashboardContent() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+
+  const [books, setBooks] = useState<Book[]>([])
+  const [loading, setLoading] = useState(true)
+  const [nextUpExpanded, setNextUpExpanded] = useState(false)
+  const [activeDragBookId, setActiveDragBookId] = useState<string | null>(null)
+  const [showAddItem, setShowAddItem] = useState(false)
+  const [showSearch, setShowSearch] = useState(false)
+  const [completeBookTarget, setCompleteBookTarget] = useState<Book | null>(null)
+
+  // Detail modal via URL params
+  const detailBookId = searchParams.get('book')
+  const detailTabParam = searchParams.get('tab') ?? 'outline'
+  const detailTab = (['outline', 'brainstorm', 'quotes'].includes(detailTabParam)
+    ? detailTabParam
+    : 'outline') as 'outline' | 'brainstorm' | 'quotes'
+
+  function openDetail(bookId: string, tab = 'outline') {
+    router.push(`/?book=${bookId}&tab=${tab}`, { scroll: false })
+  }
+
+  function closeDetail() {
+    router.push('/', { scroll: false })
+  }
+
+  const refresh = useCallback(async () => {
+    const { data } = await supabase
+      .from('books')
+      .select('*')
+      .order('sort_order', { ascending: true, nullsFirst: false })
+      .order('created_at', { ascending: false })
+    setBooks((data as Book[]) ?? [])
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { refresh() }, [refresh])
+
+  // Cmd+K / Ctrl+K → open search
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        setShowSearch(s => !s)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
+
+  const readingNow = books.filter(b => b.status === 'active' && b.type === 'book')
+  const nextUp = books.filter(b => (b.status === 'queued' || b.status === 'paused') && b.type === 'book')
+  const activeArticles = books.filter(b => b.status === 'active' && b.type === 'article')
+  const activePodcasts = books.filter(b => b.status === 'active' && b.type === 'podcast')
+  const completedBooks = books.filter(b => b.status === 'completed' && b.type === 'book')
+  const completedArticles = books.filter(b => b.status === 'completed' && b.type === 'article')
+  const completedPodcasts = books.filter(b => b.status === 'completed' && b.type === 'podcast')
+
+  const activeDragBook = activeDragBookId
+    ? books.find(b => b.id === activeDragBookId) ?? null
+    : null
+
+  async function handleMoveUp(book: Book) {
+    const currentActive = readingNow[0] ?? null
+    setBooks(prev => prev.map(b => {
+      if (b.id === book.id) return { ...b, status: 'active' }
+      if (currentActive && b.id === currentActive.id) return { ...b, status: 'queued' }
+      return b
+    }))
+    if (currentActive) {
+      await fetch(`/api/books/${currentActive.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'queued' }),
+      })
+    }
+    await fetch(`/api/books/${book.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'active' }),
+    })
+  }
+
+  function handleDragStart(event: DragStartEvent) {
+    setActiveDragBookId(event.active.id as string)
+    setNextUpExpanded(true)
+  }
+
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    setActiveDragBookId(null)
+    if (!over) return
+
+    const activeId = active.id as string
+    const overId = over.id as string
+    if (activeId === overId) return
+
+    const inReading = readingNow.some(b => b.id === activeId)
+    const inQueue = nextUp.some(b => b.id === activeId)
+
+    const overIsReadingSection = overId === READING_SECTION
+    const overIsQueueSection = overId === QUEUE_SECTION
+    const overInReading = readingNow.some(b => b.id === overId)
+    const overInQueue = nextUp.some(b => b.id === overId)
+
+    let destSection: 'reading' | 'queue' | null = null
+    if (overIsReadingSection || overInReading) destSection = 'reading'
+    else if (overIsQueueSection || overInQueue) destSection = 'queue'
+    if (!destSection) return
+
+    const sourceSection = inReading ? 'reading' : inQueue ? 'queue' : null
+    if (!sourceSection) return
+
+    if (sourceSection === destSection) {
+      const list = sourceSection === 'reading' ? readingNow : nextUp
+      const oldIndex = list.findIndex(b => b.id === activeId)
+      const newIndex = (overIsReadingSection || overIsQueueSection)
+        ? list.length - 1
+        : list.findIndex(b => b.id === overId)
+      if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return
+
+      const reordered = arrayMove(list, oldIndex, newIndex)
+      setBooks(prev => {
+        const others = prev.filter(b => !list.some(l => l.id === b.id))
+        return [...others, ...reordered.map((b, i) => ({ ...b, sort_order: i + 1 }))]
+      })
+      await fetch('/api/books/reorder', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderedIds: reordered.map(b => b.id) }),
+      })
+      await refresh()
+    } else {
+      const originalStatus = books.find(b => b.id === activeId)?.status
+      const newStatus = destSection === 'reading' ? 'active' : 'queued'
+      const currentActive = destSection === 'reading' ? (readingNow[0] ?? null) : null
+
+      setBooks(prev => prev.map(b => {
+        if (b.id === activeId) return { ...b, status: newStatus }
+        if (currentActive && b.id === currentActive.id) return { ...b, status: 'queued' }
+        return b
+      }))
+
+      if (currentActive) {
+        await fetch(`/api/books/${currentActive.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'queued' }),
+        })
+      }
+      const res = await fetch(`/api/books/${activeId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      })
+      if (!res.ok && originalStatus) {
+        setBooks(prev => prev.map(b => {
+          if (b.id === activeId) return { ...b, status: originalStatus }
+          if (currentActive && b.id === currentActive.id) return { ...b, status: currentActive.status }
+          return b
+        }))
+      }
+    }
+  }
+
+  async function handleCompleteBook(book: Book) {
+    await fetch(`/api/books/${book.id}/complete`, { method: 'POST' })
+    setCompleteBookTarget(null)
+    await refresh()
+  }
+
+  async function handleCompleteNonBook(book: Book) {
+    const today = new Date().toISOString().split('T')[0]
+    await fetch(`/api/books/${book.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'completed', date_finished: today }),
+    })
+    await refresh()
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-fog-200 flex items-center justify-center text-fog-500 text-sm">
+        Loading…
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-fog-200">
+      {/* Header */}
+      <header className="bg-white/80 border-b border-fog-300 sticky top-0 z-10 backdrop-blur-xl">
+        <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
+          <h1 className="text-2xl font-bold tracking-tight" style={{ color: '#191970' }}>MindWell</h1>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowSearch(true)}
+              className="text-fog-600 hover:text-navy-700 px-3 py-1.5 rounded-full bg-fog-100 hover:bg-fog-200 text-sm flex items-center gap-2 transition-all"
+              title="Search (⌘K)"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+                <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11ZM2 9a7 7 0 1 1 12.452 4.391l3.328 3.329a.75.75 0 1 1-1.06 1.06l-3.329-3.328A7 7 0 0 1 2 9Z" clipRule="evenodd" />
+              </svg>
+              <span className="hidden sm:inline">Search</span>
+              <kbd className="hidden sm:inline text-[10px] font-mono bg-fog-200 text-fog-500 px-1.5 py-0.5 rounded border border-fog-300">⌘K</kbd>
+            </button>
+            <button
+              onClick={() => setShowAddItem(true)}
+              className="w-9 h-9 flex items-center justify-center bg-navy-700 hover:bg-navy-800 text-white rounded-full text-xl font-light transition-all leading-none"
+              title="Add book, article, or podcast"
+            >
+              +
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-4xl mx-auto px-6 py-8 space-y-8">
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
+
+          {/* ── Reading Now ── */}
+          <section>
+            <SectionHeader>Reading Now</SectionHeader>
+            <DroppableSection id={READING_SECTION}>
+              {readingNow.length === 0 ? (
+                <div className="text-center py-12 text-fog-400 bg-white rounded-xl border border-dashed border-fog-300">
+                  <p className="text-sm mb-3">Nothing here yet</p>
+                  <button
+                    onClick={() => setShowAddItem(true)}
+                    className="text-sm text-navy-600 hover:text-navy-800 font-medium transition-colors"
+                  >
+                    Add your first book →
+                  </button>
+                </div>
+              ) : (
+                <SortableContext items={readingNow.map(b => b.id)} strategy={verticalListSortingStrategy}>
+                  <div className="space-y-2">
+                    {readingNow.map(book => (
+                      <SortableBookRow
+                        key={book.id}
+                        book={book}
+                        onOpenDetail={() => openDetail(book.id)}
+                        onComplete={() => setCompleteBookTarget(book)}
+                      />
+                    ))}
+                  </div>
+                </SortableContext>
+              )}
+            </DroppableSection>
+          </section>
+
+          {/* ── Articles ── */}
+          {activeArticles.length > 0 && (
+            <section>
+              <SectionHeader>Articles</SectionHeader>
+              <div className="space-y-2">
+                {activeArticles.map(article => (
+                  <ArticleCard
+                    key={article.id}
+                    book={article}
+                    onOpenDetail={() => openDetail(article.id)}
+                    onDone={() => handleCompleteNonBook(article)}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* ── Podcasts ── */}
+          {activePodcasts.length > 0 && (
+            <section>
+              <SectionHeader>Podcasts</SectionHeader>
+              <div className="space-y-2">
+                {activePodcasts.map(podcast => (
+                  <PodcastCard
+                    key={podcast.id}
+                    book={podcast}
+                    onOpenDetail={() => openDetail(podcast.id)}
+                    onDone={() => handleCompleteNonBook(podcast)}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* ── Next Up ── */}
+          <section>
+            <DroppableSection id={QUEUE_SECTION}>
+              <button
+                onClick={() => setNextUpExpanded(e => !e)}
+                className="flex items-center gap-2 mb-3 group"
+              >
+                <h2 className="text-[11px] font-bold uppercase tracking-widest text-[#cc5500] group-hover:text-[#b84a00] transition-colors">
+                  Next Up
+                </h2>
+                <span className="text-fog-400 text-xs group-hover:text-fog-600 transition-colors">
+                  {nextUp.length > 0 ? `(${nextUp.length}) ` : ''}{nextUpExpanded ? '▾' : '▸'}
+                </span>
+              </button>
+
+              {nextUpExpanded && (
+                nextUp.length === 0 ? (
+                  <div className="text-center py-8 text-fog-400 bg-white rounded-xl border border-dashed border-fog-300 text-sm">
+                    Drag books here from Reading Now
+                  </div>
+                ) : (
+                  <SortableContext items={nextUp.map(b => b.id)} strategy={verticalListSortingStrategy}>
+                    <div className="space-y-2">
+                      {nextUp.map(book => (
+                        <SortableBookRow
+                          key={book.id}
+                          book={book}
+                          onOpenDetail={() => openDetail(book.id)}
+                          onComplete={() => setCompleteBookTarget(book)}
+                          onMoveUp={() => handleMoveUp(book)}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                )
+              )}
+            </DroppableSection>
+          </section>
+
+          <DragOverlay dropAnimation={null}>
+            {activeDragBook && <BookDragOverlay book={activeDragBook} />}
+          </DragOverlay>
+        </DndContext>
+
+        {/* ── Completed Books ── */}
+        {completedBooks.length > 0 && (
+          <CompletedSection
+            title="Completed Books"
+            items={completedBooks}
+            onOpenDetail={book => openDetail(book.id)}
+          />
+        )}
+
+        {/* ── Completed Articles ── */}
+        {completedArticles.length > 0 && (
+          <CompletedSection
+            title="Completed Articles"
+            items={completedArticles}
+            onOpenDetail={book => openDetail(book.id)}
+          />
+        )}
+
+        {/* ── Completed Podcasts ── */}
+        {completedPodcasts.length > 0 && (
+          <CompletedSection
+            title="Completed Podcasts"
+            items={completedPodcasts}
+            onOpenDetail={book => openDetail(book.id)}
+          />
+        )}
+      </main>
+
+      {/* Modals */}
+      {showAddItem && (
+        <AddItemModal onClose={() => setShowAddItem(false)} onSuccess={refresh} />
+      )}
+
+      {completeBookTarget && (
+        <ConfirmCompleteModal
+          book={completeBookTarget}
+          onClose={() => setCompleteBookTarget(null)}
+          onConfirm={() => handleCompleteBook(completeBookTarget)}
+        />
+      )}
+
+      {detailBookId && (
+        <DetailModal
+          bookId={detailBookId}
+          initialTab={detailTab}
+          onClose={closeDetail}
+          onDelete={() => { closeDetail(); refresh() }}
+          onUpdate={refresh}
+        />
+      )}
+
+      {showSearch && <GlobalSearch onClose={() => setShowSearch(false)} />}
+    </div>
+  )
+}
+
+// ── Default export wrapped in Suspense for useSearchParams ─────────────────────
+
+export default function Dashboard() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-fog-200 flex items-center justify-center text-fog-500 text-sm">
+        Loading…
+      </div>
+    }>
+      <DashboardContent />
+    </Suspense>
+  )
+}

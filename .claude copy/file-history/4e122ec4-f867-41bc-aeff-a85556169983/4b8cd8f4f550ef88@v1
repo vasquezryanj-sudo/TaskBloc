@@ -1,0 +1,69 @@
+# BookClub — Project Memory
+
+## App Identity
+- App renamed from "Reading Tracker" → **BookClub**
+- PWA manifest, layout metadata, header all updated
+
+## Tech Stack
+- Next.js App Router, TypeScript, Tailwind CSS v4
+- Supabase for data (books, sessions, sessions, priority_items, book_notes, quotes, quote_headings)
+- @dnd-kit for drag-and-drop (book reorder, calendar drag, quote reorder)
+- next/font/google: Geist (body, --font-geist) + Lora (serif headings, --font-lora)
+
+## Design System — Library Aesthetic
+Defined in `app/globals.css` via `@theme`:
+
+**Parchment scale** (warm aged paper):
+- parchment-50 → parchment-900 (#fdf9f4 … #2c1a0e)
+- Key: bg-100 = card surfaces, bg-200 = page bg, bg-300 = borders, bg-900 = dark walnut header
+
+**Forest scale** (deep library green):
+- forest-50 → forest-900 (#edf4e8 … #122208)
+- Key: forest-700 = primary action buttons, forest-600 = hover, forest-50 = info panels
+
+**Color mapping** (old → new):
+- bg-stone-100 (page) → bg-parchment-200
+- bg-stone-50 (cards) → bg-parchment-100
+- border-stone-200 → border-parchment-300
+- text-stone-* → text-parchment-*
+- bg-blue-500 (primary buttons) → bg-forest-700
+- bg-blue-50 (info panels) → bg-forest-50
+- bg-blue-400 (progress bar) → bg-amber-500
+- today highlight blue → forest green
+
+**Shadows**: `shadow-[0_2px_6px_rgba(44,26,14,0.07)]` (warm brown-tinted)
+
+## Key UI Patterns
+
+### Dark Header (both pages)
+`bg-parchment-900 border-b border-parchment-800`
+- BookClub in serif: `font-serif text-parchment-100`
+- Buttons: `bg-forest-700` (+ Book), `bg-parchment-700` (+ Article)
+
+### Physical Raised Tabs (Notes page)
+Tab bar: `bg-parchment-200 border-b border-parchment-300`
+Each tab: `border border-b-0 -mb-px rounded-t-lg`
+- Active: `bg-parchment-100 text-forest-800 font-semibold shadow-[0_-2px_8px_rgba(44,26,14,0.07)...]`
+- Inactive: `bg-parchment-300/70 text-parchment-600 shadow-[inset_0_2px_4px_rgba(44,26,14,0.07)]`
+- Content area is `bg-parchment-100` — active tab connects visually
+
+### Book Role Badges
+- Primary (sort_order=1): violet — `text-violet-700 bg-violet-50 border-violet-200`
+- Secondary (sort_order=2): amber — `text-amber-700 bg-amber-100 border-amber-300`
+
+### Modal Style
+`bg-parchment-100 border border-parchment-300 shadow-[0_8px_32px_rgba(44,26,14,0.25)...]`
+
+### Form Inputs
+`border-parchment-300 bg-parchment-50 focus:ring-2 focus:ring-forest-700/20 focus:border-forest-600`
+
+## File Structure
+- `app/globals.css` — @theme color definitions
+- `app/layout.tsx` — Geist + Lora fonts, BookClub metadata
+- `app/page.tsx` — Dashboard
+- `app/books/[id]/page.tsx` — Notes page with raised tabs
+- `components/Modal.tsx` — Shared modal wrapper
+- `components/WeeklyCalendar.tsx` — Calendar grid (forest today, parchment grid)
+- `components/QuotesWithHeadings.tsx` — Quotes tab content
+- `components/OutlineEditor.tsx` — Outline textarea
+- `public/manifest.json` — PWA name + parchment theme_color

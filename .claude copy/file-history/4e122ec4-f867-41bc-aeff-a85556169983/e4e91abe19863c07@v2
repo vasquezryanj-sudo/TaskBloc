@@ -1,0 +1,487 @@
+'use client'
+
+import { useState, useRef, useEffect } from 'react'
+import { supabase } from '@/lib/supabase'
+import type { Quote } from '@/types'
+
+// ── Tag color assignment ────────────────────────────────────────────────────
+
+const TAG_PALETTES = [
+  'bg-blue-900/60 text-blue-300 border-blue-700/50',
+  'bg-violet-900/60 text-violet-300 border-violet-700/50',
+  'bg-emerald-900/60 text-emerald-300 border-emerald-700/50',
+  'bg-amber-900/60 text-amber-300 border-amber-700/50',
+  'bg-rose-900/60 text-rose-300 border-rose-700/50',
+  'bg-teal-900/60 text-teal-300 border-teal-700/50',
+  'bg-indigo-900/60 text-indigo-300 border-indigo-700/50',
+  'bg-orange-900/60 text-orange-300 border-orange-700/50',
+]
+
+function tagColor(tag: string): string {
+  let hash = 0
+  for (let i = 0; i < tag.length; i++) {
+    hash = (hash * 31 + tag.charCodeAt(i)) & 0xffffffff
+  }
+  return TAG_PALETTES[Math.abs(hash) % TAG_PALETTES.length]
+}
+
+// ── Copy button (like Claude's code copy button) ───────────────────────────
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false)
+
+  async function handleCopy() {
+    await navigator.clipboard.writeText(text)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <button
+      onClick={handleCopy}
+      title="Copy quote"
+      className="flex items-center gap-1.5 text-xs text-well-300 hover:text-well-100 bg-well-800 hover:bg-well-700 border border-well-700/60 px-2 py-1 rounded-md transition-all"
+    >
+      {copied ? (
+        <>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5 text-emerald-400">
+            <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd" />
+          </svg>
+          <span className="text-emerald-400">Copied</span>
+        </>
+      ) : (
+        <>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+            <path d="M7 3.5A1.5 1.5 0 0 1 8.5 2h3.879a1.5 1.5 0 0 1 1.06.44l3.122 3.12A1.5 1.5 0 0 1 17 6.622V12.5a1.5 1.5 0 0 1-1.5 1.5h-1v-3.379a3 3 0 0 0-.879-2.121L10.5 5.379A3 3 0 0 0 8.379 4.5H7v-1Z" />
+            <path d="M4.5 6A1.5 1.5 0 0 0 3 7.5v9A1.5 1.5 0 0 0 4.5 18h7a1.5 1.5 0 0 0 1.5-1.5v-5.879a1.5 1.5 0 0 0-.44-1.06L9.44 6.439A1.5 1.5 0 0 0 8.378 6H4.5Z" />
+          </svg>
+          Copy
+        </>
+      )}
+    </button>
+  )
+}
+
+// ── Tag input ──────────────────────────────────────────────────────────────
+
+function TagInput({
+  tags,
+  onChange,
+}: {
+  tags: string[]
+  onChange: (tags: string[]) => void
+}) {
+  const [input, setInput] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  function addTag(raw: string) {
+    const tag = raw.trim().toLowerCase().replace(/\s+/g, '-')
+    if (!tag || tags.includes(tag)) {
+      setInput('')
+      return
+    }
+    onChange([...tags, tag])
+    setInput('')
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault()
+      addTag(input)
+    }
+    if (e.key === 'Backspace' && !input && tags.length > 0) {
+      onChange(tags.slice(0, -1))
+    }
+  }
+
+  return (
+    <div
+      className="flex flex-wrap gap-1.5 items-center min-h-8 px-2 py-1.5 bg-well-950 border border-well-800 rounded-lg cursor-text"
+      onClick={() => inputRef.current?.focus()}
+    >
+      {tags.map(tag => (
+        <span
+          key={tag}
+          className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${tagColor(tag)}`}
+        >
+          {tag}
+          <button
+            onClick={e => { e.stopPropagation(); onChange(tags.filter(t => t !== tag)) }}
+            className="hover:text-white ml-0.5 leading-none"
+          >
+            ×
+          </button>
+        </span>
+      ))}
+      <input
+        ref={inputRef}
+        value={input}
+        onChange={e => setInput(e.target.value)}
+        onKeyDown={handleKeyDown}
+        onBlur={() => { if (input.trim()) addTag(input) }}
+        placeholder={tags.length === 0 ? 'Add tags…' : ''}
+        className="flex-1 min-w-[80px] bg-transparent text-xs text-well-100 placeholder:text-well-400 outline-none"
+      />
+    </div>
+  )
+}
+
+// ── Quote widget ────────────────────────────────────────────────────────────
+
+function QuoteWidget({
+  quote,
+  onUpdate,
+  onDelete,
+}: {
+  quote: Quote
+  onUpdate: (updated: Quote) => void
+  onDelete: (id: string) => void
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [editText, setEditText] = useState(quote.quote_text)
+  const [editPage, setEditPage] = useState(quote.page_number?.toString() ?? '')
+  const [editTags, setEditTags] = useState<string[]>(quote.tags ?? [])
+  const [saving, setSaving] = useState(false)
+  const [tags, setTags] = useState<string[]>(quote.tags ?? [])
+
+  // Keep local tags in sync with prop
+  useEffect(() => { setTags(quote.tags ?? []) }, [quote.tags])
+
+  async function handleSaveEdit() {
+    setSaving(true)
+    const updates = {
+      quote_text: editText.trim(),
+      page_number: editPage ? Number(editPage) : null,
+      tags: editTags,
+    }
+    const { data, error } = await supabase
+      .from('quotes')
+      .update(updates)
+      .eq('id', quote.id)
+      .select()
+      .single()
+    if (!error && data) {
+      onUpdate({ ...data as Quote, tags: (data as Quote).tags ?? [] })
+    }
+    setSaving(false)
+    setEditing(false)
+  }
+
+  async function handleTagsChange(newTags: string[]) {
+    setTags(newTags)
+    const { data, error } = await supabase
+      .from('quotes')
+      .update({ tags: newTags })
+      .eq('id', quote.id)
+      .select()
+      .single()
+    if (!error && data) {
+      onUpdate({ ...data as Quote, tags: newTags })
+    }
+  }
+
+  const preview = quote.quote_text.length > 140
+    ? quote.quote_text.slice(0, 140).trim() + '…'
+    : quote.quote_text
+
+  if (editing) {
+    return (
+      <div className="bg-well-900 rounded-xl border border-ripple-600/40 shadow-[0_0_0_1px_rgba(8,116,224,0.15),0_4px_16px_rgba(0,0,0,0.5)] p-4 space-y-3">
+        <textarea
+          autoFocus
+          value={editText}
+          onChange={e => setEditText(e.target.value)}
+          rows={4}
+          className="w-full resize-none bg-well-950 border border-well-800 rounded-lg px-3 py-2 text-sm text-well-50 leading-relaxed placeholder:text-well-400 focus:outline-none focus:ring-2 focus:ring-ripple-600/30 focus:border-ripple-600/60 transition-all"
+        />
+        <div className="flex gap-2 items-center">
+          <label className="text-sm text-well-300 shrink-0">p.</label>
+          <input
+            type="number"
+            min={1}
+            value={editPage}
+            onChange={e => setEditPage(e.target.value)}
+            placeholder="—"
+            className="w-16 bg-well-950 border border-well-800 rounded-lg px-2 py-1.5 text-sm text-well-100 focus:outline-none focus:ring-2 focus:ring-ripple-600/30 focus:border-ripple-600/60 transition-all"
+          />
+        </div>
+        <TagInput tags={editTags} onChange={setEditTags} />
+        <div className="flex gap-2 justify-end">
+          <button
+            onClick={() => { setEditing(false); setEditText(quote.quote_text); setEditPage(quote.page_number?.toString() ?? ''); setEditTags(quote.tags ?? []) }}
+            className="text-sm text-well-300 hover:text-well-100 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSaveEdit}
+            disabled={saving || !editText.trim()}
+            className="bg-ripple-600 hover:bg-ripple-500 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-all disabled:opacity-40 shadow-[0_0_12px_rgba(8,116,224,0.3)]"
+          >
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className={`bg-well-900 rounded-xl border transition-all ${
+      expanded
+        ? 'border-well-700 shadow-[0_4px_24px_rgba(0,0,0,0.5)]'
+        : 'border-well-800 shadow-[0_2px_8px_rgba(0,0,0,0.4)] hover:border-well-700 hover:shadow-[0_2px_12px_rgba(0,0,0,0.5)]'
+    }`}>
+
+      {/* Collapsed header — always visible */}
+      <div
+        className="px-4 pt-4 pb-3 cursor-pointer"
+        onClick={() => setExpanded(e => !e)}
+      >
+        {/* Page number + actions row */}
+        <div className="flex items-start justify-between gap-3 mb-2">
+          <div className="flex items-center gap-2">
+            {quote.page_number != null && (
+              <span className="text-xs font-mono text-well-400 bg-well-800/60 border border-well-700/40 px-1.5 py-0.5 rounded">
+                p.{quote.page_number}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              onClick={e => { e.stopPropagation(); setEditing(true); setExpanded(true) }}
+              className="text-well-500 hover:text-well-200 p-1 rounded transition-colors"
+              title="Edit"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+                <path d="M2.695 14.763l-1.262 3.154a.5.5 0 0 0 .65.65l3.155-1.262a4 4 0 0 0 1.343-.885L17.5 5.5a2.121 2.121 0 0 0-3-3L3.58 13.42a4 4 0 0 0-.885 1.343Z" />
+              </svg>
+            </button>
+            <button
+              onClick={e => { e.stopPropagation(); onDelete(quote.id) }}
+              className="text-well-500 hover:text-rose-400 p-1 rounded transition-colors"
+              title="Delete"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+                <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 1 0 .23 1.482l.149-.022.841 10.518A2.75 2.75 0 0 0 7.596 19h4.807a2.75 2.75 0 0 0 2.742-2.53l.841-10.52.149.023a.75.75 0 0 0 .23-1.482A41.03 41.03 0 0 0 14 4.193V3.75A2.75 2.75 0 0 0 11.25 1h-2.5ZM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4ZM8.58 7.72a.75.75 0 0 0-1.5.06l.3 7.5a.75.75 0 1 0 1.5-.06l-.3-7.5Zm4.34.06a.75.75 0 1 0-1.5-.06l-.3 7.5a.75.75 0 1 0 1.5.06l.3-7.5Z" clipRule="evenodd" />
+              </svg>
+            </button>
+            <button
+              className="text-well-500 hover:text-well-200 p-1 rounded transition-colors"
+              title={expanded ? 'Collapse' : 'Expand'}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className={`w-3.5 h-3.5 transition-transform ${expanded ? 'rotate-180' : ''}`}>
+                <path fillRule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Quote preview */}
+        <p className="text-sm text-well-100 leading-relaxed italic">
+          &ldquo;{expanded ? quote.quote_text : preview}&rdquo;
+        </p>
+
+        {/* Tags */}
+        {tags.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mt-2.5">
+            {tags.map(tag => (
+              <span
+                key={tag}
+                className={`inline-flex items-center text-xs px-2 py-0.5 rounded-full border ${tagColor(tag)}`}
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Expanded section */}
+      {expanded && (
+        <div className="px-4 pb-4 border-t border-well-800/60 pt-3 space-y-3">
+          {/* Copy button */}
+          <div className="flex justify-end">
+            <CopyButton text={quote.quote_text} />
+          </div>
+
+          {/* Tag editor */}
+          <div>
+            <p className="text-[11px] font-medium uppercase tracking-wider text-well-400 mb-1.5">Tags</p>
+            <TagInput tags={tags} onChange={handleTagsChange} />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Add quote form ─────────────────────────────────────────────────────────
+
+function AddQuoteForm({
+  onAdd,
+}: {
+  onAdd: (quote: Quote) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [text, setText] = useState('')
+  const [page, setPage] = useState('')
+  const [tags, setTags] = useState<string[]>([])
+  const [adding, setAdding] = useState(false)
+
+  async function handleAdd(bookId: string) {
+    if (!text.trim()) return
+    setAdding(true)
+    const { data, error } = await supabase
+      .from('quotes')
+      .insert({
+        book_id: bookId,
+        quote_text: text.trim(),
+        page_number: page ? Number(page) : null,
+        tags,
+        heading_id: null,
+        sort_order: null,
+      })
+      .select()
+      .single()
+    if (!error && data) {
+      onAdd({ ...data as Quote, tags: (data as Quote).tags ?? [] })
+      setText('')
+      setPage('')
+      setTags([])
+      setOpen(false)
+    }
+    setAdding(false)
+  }
+
+  // We need bookId from parent — refactor to accept it
+  return { open, setOpen, text, setText, page, setPage, tags, setTags, adding, handleAdd }
+}
+
+// ── Main Quotes component ──────────────────────────────────────────────────
+
+interface Props {
+  bookId: string
+  quotes: Quote[]
+  onUpdate: (quotes: Quote[]) => void
+}
+
+export default function Quotes({ bookId, quotes, onUpdate }: Props) {
+  const [addOpen, setAddOpen] = useState(false)
+  const [addText, setAddText] = useState('')
+  const [addPage, setAddPage] = useState('')
+  const [addTags, setAddTags] = useState<string[]>([])
+  const [adding, setAdding] = useState(false)
+
+  // Sort by page number (nulls last), then creation time
+  const sorted = [...quotes].sort((a, b) => {
+    if (a.page_number == null && b.page_number == null) return 0
+    if (a.page_number == null) return 1
+    if (b.page_number == null) return -1
+    return a.page_number - b.page_number
+  })
+
+  async function handleAdd() {
+    if (!addText.trim()) return
+    setAdding(true)
+    const { data, error } = await supabase
+      .from('quotes')
+      .insert({
+        book_id: bookId,
+        quote_text: addText.trim(),
+        page_number: addPage ? Number(addPage) : null,
+        tags: addTags,
+        heading_id: null,
+        sort_order: null,
+      })
+      .select()
+      .single()
+    if (!error && data) {
+      const newQuote = { ...data as Quote, tags: (data as Quote).tags ?? [] }
+      onUpdate([...quotes, newQuote])
+      setAddText('')
+      setAddPage('')
+      setAddTags([])
+      setAddOpen(false)
+    }
+    setAdding(false)
+  }
+
+  function handleUpdate(updated: Quote) {
+    onUpdate(quotes.map(q => q.id === updated.id ? updated : q))
+  }
+
+  async function handleDelete(id: string) {
+    await supabase.from('quotes').delete().eq('id', id)
+    onUpdate(quotes.filter(q => q.id !== id))
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* Add quote form */}
+      {addOpen ? (
+        <div className="bg-well-900 rounded-xl border border-ripple-600/40 shadow-[0_0_0_1px_rgba(8,116,224,0.1),0_4px_16px_rgba(0,0,0,0.5)] p-4 space-y-3">
+          <textarea
+            autoFocus
+            value={addText}
+            onChange={e => setAddText(e.target.value)}
+            placeholder="Paste or type quote text…"
+            rows={3}
+            className="w-full resize-none bg-well-950 border border-well-800 rounded-lg px-3 py-2 text-sm text-well-50 leading-relaxed placeholder:text-well-400 focus:outline-none focus:ring-2 focus:ring-ripple-600/30 focus:border-ripple-600/60 transition-all"
+          />
+          <div className="flex gap-2 items-center">
+            <label className="text-sm text-well-300 shrink-0">p.</label>
+            <input
+              type="number"
+              min={1}
+              value={addPage}
+              onChange={e => setAddPage(e.target.value)}
+              placeholder="—"
+              className="w-16 bg-well-950 border border-well-800 rounded-lg px-2 py-1.5 text-sm text-well-100 focus:outline-none focus:ring-2 focus:ring-ripple-600/30 focus:border-ripple-600/60 transition-all"
+            />
+          </div>
+          <TagInput tags={addTags} onChange={setAddTags} />
+          <div className="flex gap-2 justify-end">
+            <button
+              onClick={() => { setAddOpen(false); setAddText(''); setAddPage(''); setAddTags([]) }}
+              className="text-sm text-well-300 hover:text-well-100 px-3 py-1.5 rounded-lg transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleAdd}
+              disabled={adding || !addText.trim()}
+              className="bg-ripple-600 hover:bg-ripple-500 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-all disabled:opacity-40 shadow-[0_0_12px_rgba(8,116,224,0.3)]"
+            >
+              {adding ? 'Adding…' : 'Add quote'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          onClick={() => setAddOpen(true)}
+          className="w-full text-left text-sm text-well-400 hover:text-well-100 border border-dashed border-well-800 hover:border-well-700 rounded-xl px-4 py-3 transition-all hover:bg-well-900/50"
+        >
+          + Add quote
+        </button>
+      )}
+
+      {/* Quote list */}
+      {sorted.length === 0 && !addOpen && (
+        <div className="text-center py-12 text-well-400">
+          <p className="text-3xl mb-3 opacity-50">❝</p>
+          <p className="text-sm">No quotes yet. Add your first passage.</p>
+        </div>
+      )}
+
+      {sorted.map(quote => (
+        <QuoteWidget
+          key={quote.id}
+          quote={quote}
+          onUpdate={handleUpdate}
+          onDelete={handleDelete}
+        />
+      ))}
+    </div>
+  )
+}

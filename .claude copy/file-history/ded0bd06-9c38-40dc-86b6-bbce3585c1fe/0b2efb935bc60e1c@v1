@@ -1,0 +1,16 @@
+{
+  "name": "Reading Tracker",
+  "short_name": "Reading Tracker",
+  "description": "Personal reading schedule and notes",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#e7e5e4",
+  "theme_color": "#e7e5e4",
+  "icons": [
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "1024x1024",
+      "type": "image/png"
+    }
+  ]
+}

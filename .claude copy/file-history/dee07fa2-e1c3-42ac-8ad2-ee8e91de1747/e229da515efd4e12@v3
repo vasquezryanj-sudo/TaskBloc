@@ -1,0 +1,154 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import { supabase } from '@/lib/supabase'
+
+const BASIC_FEATURES = [
+  'Up to 3 active works',
+  'Outline, Brainstorm & Quotes tabs',
+  'PDF export per item',
+  'Sign in with Google',
+]
+
+const PRO_FEATURES = [
+  'Unlimited active works',
+  'Everything in Basic',
+  'Full tag search across all works',
+  'Cross-book PDF export',
+  'Priority support',
+]
+
+const ANNUAL_FEATURES = [
+  'Everything in Pro',
+  'Save 17% vs monthly',
+  'Billed once a year',
+]
+
+function CheckIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="currentColor" className="w-4 h-4 shrink-0">
+      <path fillRule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clipRule="evenodd" />
+    </svg>
+  )
+}
+
+export default function PricingPage() {
+  const router = useRouter()
+  const [isPro, setIsPro]   = useState(false)
+  const [loadingPlan, setLoadingPlan] = useState<'monthly' | 'annual' | 'portal' | null>(null)
+  const [error, setError]   = useState('')
+
+  useEffect(() => {
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user) return
+      const { data } = await supabase
+        .from('profiles')
+        .select('subscription_status, is_comped')
+        .eq('id', user.id)
+        .single()
+      setIsPro(data?.subscription_status === 'pro' || data?.is_comped === true)
+    })
+  }, [])
+
+  async function handleSubscribe(plan: 'monthly' | 'annual') {
+    setError('')
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { router.push('/login'); return }
+
+    setLoadingPlan(plan)
+    try {
+      const res  = await fetch('/api/stripe/checkout', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ plan }),
+      })
+      const json = await res.json()
+      if (!res.ok) { setError(json.error ?? 'Something went wrong'); return }
+      window.location.href = json.url
+    } catch {
+      setError('Network error — please try again')
+    } finally {
+      setLoadingPlan(null)
+    }
+  }
+
+  async function handleManage() {
+    setError('')
+    setLoadingPlan('portal')
+    try {
+      const res  = await fetch('/api/stripe/portal')
+      const json = await res.json()
+      if (!res.ok) { setError(json.error ?? 'Something went wrong'); return }
+      window.location.href = json.url
+    } catch {
+      setError('Network error — please try again')
+    } finally {
+      setLoadingPlan(null)
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-fog-200 flex flex-col">
+
+      {/* ── Header ── */}
+      <header className="bg-white/80 border-b border-fog-300 backdrop-blur-xl sticky top-0 z-10">
+        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
+          <Link href="/" className="text-2xl font-bold tracking-tight" style={{ color: '#191970' }}>
+            MindWell
+          </Link>
+          <Link href="/home" className="text-sm text-fog-600 hover:text-navy-700 transition-colors">
+            ← Back to app
+          </Link>
+        </div>
+      </header>
+
+      <main className="flex-1 max-w-5xl mx-auto px-6 py-16 w-full">
+
+        {/* ── Hero ── */}
+        <div className="text-center mb-14">
+          <h1 className="text-4xl font-bold tracking-tight mb-3" style={{ color: '#191970' }}>
+            Find the plan that fits
+          </h1>
+          <p className="text-fog-600 text-lg max-w-md mx-auto leading-relaxed">
+            Start free and upgrade when you&rsquo;re ready for more.
+          </p>
+        </div>
+
+        {/* ── Tier cards ── */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+
+          {/* ── Basic (free) ── */}
+          <div className="bg-white rounded-2xl border border-fog-300 shadow-sm p-7 flex flex-col gap-6">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-fog-500 mb-1">Free</p>
+              <h2 className="text-xl font-bold text-navy-900">MindWell Basic</h2>
+              <div className="mt-3 flex items-end gap-1">
+                <span className="text-4xl font-bold text-navy-900">$0</span>
+                <span className="text-fog-500 text-sm mb-1">/ forever</span>
+              </div>
+            </div>
+
+            <ul className="space-y-3 flex-1">
+              {BASIC_FEATURES.map(f => (
+                <li key={f} className="flex items-start gap-2.5 text-sm text-navy-800">
+                  <span className="text-fog-400 mt-0.5"><CheckIcon /></span>
+                  {f}
+                </li>
+              ))}
+            </ul>
+
+            <div className="pt-1">
+              {isPro ? (
+                <p className="text-center text-sm text-fog-500 py-2">Your current plan</p>
+              ) : (
+                <Link
+                  href="/home"
+                  className="block w-full text-center bg-fog-100 hover:bg-fog-200 text-navy-700 px-4 py-2.5 rounded-full text-sm font-semibold transition-all"
+                >
+                  Get started free
+                </Link>
+              )}
+            </div>
+          </div>

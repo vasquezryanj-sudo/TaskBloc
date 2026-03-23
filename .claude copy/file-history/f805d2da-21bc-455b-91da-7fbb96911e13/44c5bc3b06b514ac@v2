@@ -1,0 +1,15 @@
+-- Migration 006: Fix INSERT RLS on all user-scoped tables
+--
+-- Problem: the FOR ALL policy uses WITH CHECK (auth.uid() = user_id), but
+-- API routes never pass user_id in INSERT payloads, so the column stays NULL
+-- and the check fails.
+--
+-- Fix: set DEFAULT auth.uid() on each user_id column so Postgres stamps it
+-- automatically on every INSERT. The existing WITH CHECK policy then passes
+-- because the default makes user_id equal to auth.uid() at insert time.
+
+ALTER TABLE books          ALTER COLUMN user_id SET DEFAULT auth.uid();
+ALTER TABLE quotes         ALTER COLUMN user_id SET DEFAULT auth.uid();
+ALTER TABLE book_notes     ALTER COLUMN user_id SET DEFAULT auth.uid();
+ALTER TABLE connections    ALTER COLUMN user_id SET DEFAULT auth.uid();
+ALTER TABLE quote_headings ALTER COLUMN user_id SET DEFAULT auth.uid();

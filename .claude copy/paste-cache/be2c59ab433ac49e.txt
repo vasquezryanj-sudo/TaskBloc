@@ -1,0 +1,11 @@
+Here's the prompt:
+
+"Rewrite the Outline and Brainstorm editors to use a contenteditable div instead of a plain textarea. This removes the Edit/Preview split entirely — the editor should always display inline Q buttons for linked quotes, with no mode switching.
+Specific requirements:
+The contenteditable div should look and behave like the current textarea — same padding, font, line height, and auto-growing height.
+When a quote is linked via the Link Quote modal, insert a small inline Q button chip at the cursor position instead of raw [quote:id] text. The chip should be a small rounded button with the letter Q in amber/ember color, non-editable, and treated as a single atomic unit (can be selected and deleted as one piece, not character by character).
+When the user clicks a Q chip, show a small popover (not the full detail modal) displaying the quote text and its tags. The popover should close when clicking outside.
+For storage: serialize the contenteditable content back to the existing [quote:id] format when saving to Supabase, so the database format doesn't change. On load, deserialize [quote:id] tokens back into rendered Q chips.
+Apply this to both the Outline tab editor (OutlineEditor.tsx) and the Brainstorm tab editor. Both should behave identically with respect to quote linking and chip rendering.
+The Link Quote modal and the + New Quote flow should remain unchanged — only the editor rendering changes.
+Run a TypeScript check after and push to GitHub.

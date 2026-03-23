@@ -1,0 +1,29 @@
+'use client'
+
+interface ModalProps {
+  title: string
+  onClose: () => void
+  children: React.ReactNode
+}
+
+export default function Modal({ title, onClose, children }: ModalProps) {
+  return (
+    <div
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div className="bg-parchment-100 rounded-xl shadow-[0_8px_32px_rgba(44,26,14,0.25),0_2px_8px_rgba(44,26,14,0.15)] border border-parchment-300 w-full max-w-md">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-parchment-200">
+          <h2 className="font-semibold text-parchment-900">{title}</h2>
+          <button
+            onClick={onClose}
+            className="text-parchment-400 hover:text-parchment-700 text-xl leading-none"
+          >
+            ×
+          </button>
+        </div>
+        <div className="px-6 py-5">{children}</div>
+      </div>
+    </div>
+  )
+}

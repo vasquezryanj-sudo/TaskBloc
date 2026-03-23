@@ -1,0 +1,197 @@
+'use client'
+
+import { useState, useEffect, useRef, useCallback } from 'react'
+import Link from 'next/link'
+import { useParams } from 'next/navigation'
+import { supabase } from '@/lib/supabase'
+import OutlineEditor from '@/components/OutlineEditor'
+import QuotesWithHeadings from '@/components/QuotesWithHeadings'
+import type { Book, Quote, QuoteHeading } from '@/types'
+
+type Tab = 'outline' | 'scratch' | 'quotes'
+type SaveStatus = 'idle' | 'saving' | 'saved'
+
+export default function NotesPage() {
+  const { id } = useParams<{ id: string }>()
+
+  const [book, setBook] = useState<Book | null>(null)
+  const [notes, setNotes] = useState<Record<'outline' | 'scratch', string>>({ outline: '', scratch: '' })
+  const [quotes, setQuotes] = useState<Quote[]>([])
+  const [headings, setHeadings] = useState<QuoteHeading[]>([])
+  const [activeTab, setActiveTab] = useState<Tab>('outline')
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
+  const [loading, setLoading] = useState(true)
+  const [notFound, setNotFound] = useState(false)
+
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const load = useCallback(async () => {
+    const [bookRes, notesRes, headingsRes, quotesRes] = await Promise.all([
+      supabase.from('books').select('*').eq('id', id).single(),
+      supabase.from('book_notes').select('*').eq('book_id', id),
+      supabase.from('quote_headings').select('*').eq('book_id', id).order('sort_order'),
+      supabase.from('quotes').select('*').eq('book_id', id).order('sort_order').order('created_at'),
+    ])
+
+    if (bookRes.error || !bookRes.data) {
+      setNotFound(true)
+      setLoading(false)
+      return
+    }
+
+    setBook(bookRes.data as Book)
+
+    const notesMap: Record<string, string> = {}
+    for (const note of notesRes.data ?? []) {
+      notesMap[note.tab] = note.content
+    }
+    setNotes({ outline: notesMap.outline ?? '', scratch: notesMap.scratch ?? '' })
+    setHeadings((headingsRes.data as QuoteHeading[]) ?? [])
+    setQuotes((quotesRes.data as Quote[]) ?? [])
+    setLoading(false)
+  }, [id])
+
+  useEffect(() => { load() }, [load])
+
+  function handleNoteChange(tab: 'outline' | 'scratch', content: string) {
+    setNotes(n => ({ ...n, [tab]: content }))
+    setSaveStatus('saving')
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(async () => {
+      await supabase
+        .from('book_notes')
+        .upsert({ book_id: id, tab, content }, { onConflict: 'book_id,tab' })
+      setSaveStatus('saved')
+      setTimeout(() => setSaveStatus('idle'), 2500)
+    }, 600)
+  }
+
+  async function handleExportPDF() {
+    const res = await fetch(`/api/export/pdf/${id}`)
+    if (!res.ok) return
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${book?.title ?? 'notes'}.pdf`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-slate-400 text-sm">
+        Loading…
+      </div>
+    )
+  }
+
+  if (notFound) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center text-slate-400 gap-3">
+        <p className="text-lg">Book not found.</p>
+        <Link href="/" className="text-sm text-blue-500 hover:underline">← Back to schedule</Link>
+      </div>
+    )
+  }
+
+  const isArticle = book?.type === 'article'
+
+  const TABS: { key: Tab; label: string }[] = [
+    { key: 'outline', label: 'Outline' },
+    { key: 'scratch', label: 'Scratch' },
+    { key: 'quotes', label: `Quotes${quotes.length > 0 ? ` (${quotes.length})` : ''}` },
+  ]
+
+  return (
+    <div className="min-h-screen bg-slate-50 flex flex-col">
+      {/* Header */}
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
+        <div className="max-w-3xl mx-auto px-6 py-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4 min-w-0">
+              <Link
+                href="/"
+                className="text-sm text-slate-400 hover:text-slate-700 shrink-0 transition-colors"
+              >
+                ← Dashboard
+              </Link>
+              <div className="flex items-center gap-2 min-w-0">
+                <h1 className="text-lg font-semibold text-slate-900 truncate">{book?.title}</h1>
+                {isArticle && (
+                  <span className="text-xs text-green-600 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded font-medium shrink-0">
+                    Article
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-3 shrink-0">
+              <span className={`text-xs transition-opacity ${saveStatus === 'idle' ? 'opacity-0' : 'opacity-100'} ${saveStatus === 'saved' ? 'text-green-500' : 'text-slate-400'}`}>
+                {saveStatus === 'saving' ? 'Saving…' : 'Saved'}
+              </span>
+              <button
+                onClick={handleExportPDF}
+                className="text-sm text-slate-500 hover:text-slate-800 border border-slate-200 px-3 py-1.5 rounded-lg hover:bg-slate-50 transition-colors"
+              >
+                ↓ PDF
+              </button>
+            </div>
+          </div>
+
+          {/* Tab bar */}
+          <div className="flex gap-0 mt-4 border-b border-slate-200 -mb-px">
+            {TABS.map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === tab.key
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </header>
+
+      {/* Content */}
+      <main className="flex-1 max-w-3xl w-full mx-auto px-6 py-6">
+
+        {/* Outline */}
+        {activeTab === 'outline' && (
+          <OutlineEditor
+            value={notes.outline}
+            onChange={content => handleNoteChange('outline', content)}
+          />
+        )}
+
+        {/* Scratch */}
+        {activeTab === 'scratch' && (
+          <textarea
+            key="scratch"
+            value={notes.scratch}
+            onChange={e => handleNoteChange('scratch', e.target.value)}
+            placeholder="Free-form scratch space — anything goes…"
+            className="w-full h-[calc(100vh-200px)] resize-none bg-white rounded-xl border border-slate-200 px-5 py-4 text-sm text-slate-800 leading-relaxed placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300 transition-colors"
+          />
+        )}
+
+        {/* Quotes */}
+        {activeTab === 'quotes' && (
+          <QuotesWithHeadings
+            bookId={id}
+            headings={headings}
+            quotes={quotes}
+            onUpdate={(newHeadings, newQuotes) => {
+              setHeadings(newHeadings)
+              setQuotes(newQuotes)
+            }}
+          />
+        )}
+      </main>
+    </div>
+  )
+}

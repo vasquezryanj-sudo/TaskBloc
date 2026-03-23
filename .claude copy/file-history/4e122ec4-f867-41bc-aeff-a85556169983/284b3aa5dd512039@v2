@@ -1,0 +1,108 @@
+-- ============================================================
+-- Reading Tracker – Supabase Schema
+-- Run this in the Supabase SQL editor to set up your database.
+-- ============================================================
+
+-- Books
+CREATE TABLE books (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title            TEXT NOT NULL,
+  current_page     INTEGER NOT NULL DEFAULT 0,
+  total_pages      INTEGER NOT NULL,
+  sessions_per_week INTEGER NOT NULL DEFAULT 3,
+  status           TEXT NOT NULL DEFAULT 'active'
+                     CHECK (status IN ('active', 'completed', 'paused', 'queued')),
+  is_priority      BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Sessions
+CREATE TABLE sessions (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  book_id          UUID NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+  scheduled_date   DATE NOT NULL,
+  pages_start      INTEGER NOT NULL,
+  pages_end        INTEGER NOT NULL,
+  actual_end_page  INTEGER,           -- set when user logs actual progress
+  is_completed     BOOLEAN NOT NULL DEFAULT FALSE,
+  order_index      INTEGER NOT NULL,  -- position in the book's schedule
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Priority items (articles, one-offs that displace reading sessions)
+CREATE TABLE priority_items (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title            TEXT NOT NULL,
+  description      TEXT,
+  sessions_needed  INTEGER NOT NULL DEFAULT 1,
+  scheduled_date   DATE NOT NULL,
+  is_completed     BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Per-book notes for Outline and Scratch tabs (one row per book per tab)
+CREATE TABLE book_notes (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  book_id          UUID NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+  tab              TEXT NOT NULL CHECK (tab IN ('outline', 'scratch')),
+  content          TEXT NOT NULL DEFAULT '',
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (book_id, tab)
+);
+
+-- Quotes (separate rows so they can be listed individually)
+CREATE TABLE quotes (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  book_id          UUID NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+  quote_text       TEXT NOT NULL,
+  page_number      INTEGER,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ── Indexes ──────────────────────────────────────────────────
+
+CREATE INDEX sessions_book_id_idx        ON sessions(book_id);
+CREATE INDEX sessions_scheduled_date_idx ON sessions(scheduled_date);
+CREATE INDEX priority_items_date_idx     ON priority_items(scheduled_date);
+CREATE INDEX book_notes_book_id_idx      ON book_notes(book_id);
+CREATE INDEX quotes_book_id_idx          ON quotes(book_id);
+
+-- ── updated_at trigger ───────────────────────────────────────
+
+CREATE OR REPLACE FUNCTION update_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER books_updated_at
+  BEFORE UPDATE ON books
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+CREATE TRIGGER sessions_updated_at
+  BEFORE UPDATE ON sessions
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+CREATE TRIGGER book_notes_updated_at
+  BEFORE UPDATE ON book_notes
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- ── Row Level Security (optional but recommended) ────────────
+-- Enable RLS and allow all access for now (single-user app).
+-- Replace the policies with auth-based ones when you add login.
+
+ALTER TABLE books          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sessions       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE priority_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE book_notes     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE quotes         ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "allow all" ON books          FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "allow all" ON sessions       FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "allow all" ON priority_items FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "allow all" ON book_notes     FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "allow all" ON quotes         FOR ALL USING (true) WITH CHECK (true);

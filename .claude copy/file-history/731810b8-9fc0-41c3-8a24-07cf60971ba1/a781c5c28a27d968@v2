@@ -1,0 +1,61 @@
+-- Migration 002: v2 redesign
+-- Run this in the Supabase SQL editor
+
+-- 1. Add type column to books (book | article)
+ALTER TABLE books ADD COLUMN IF NOT EXISTS type TEXT NOT NULL DEFAULT 'book'
+  CHECK (type IN ('book', 'article'));
+
+-- 2. Add sort_order for drag-and-drop reordering (per type)
+ALTER TABLE books ADD COLUMN IF NOT EXISTS sort_order INTEGER;
+
+-- 3. Add date_finished for completed books
+ALTER TABLE books ADD COLUMN IF NOT EXISTS date_finished DATE;
+
+-- 4. Remove is_priority (no longer needed)
+-- We keep the column for now and just stop using it to avoid breaking existing data.
+-- You can drop it later: ALTER TABLE books DROP COLUMN is_priority;
+
+-- 5. Backfill sort_order for existing active books
+UPDATE books
+SET sort_order = sub.rn
+FROM (
+  SELECT id,
+    ROW_NUMBER() OVER (PARTITION BY type ORDER BY created_at ASC) AS rn
+  FROM books
+  WHERE status = 'active'
+) sub
+WHERE books.id = sub.id
+  AND books.sort_order IS NULL;
+
+-- 6. Set sort_order for completed books too (just give them a sequential number)
+UPDATE books
+SET sort_order = sub.rn
+FROM (
+  SELECT id,
+    ROW_NUMBER() OVER (PARTITION BY type ORDER BY created_at ASC) AS rn
+  FROM books
+  WHERE status = 'completed'
+) sub
+WHERE books.id = sub.id
+  AND books.sort_order IS NULL;
+
+-- 7. Create quote_headings table
+CREATE TABLE IF NOT EXISTS quote_headings (
+  id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  book_id    UUID        NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+  name       TEXT        NOT NULL,
+  sort_order INTEGER     NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE quote_headings ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "allow_all_quote_headings" ON quote_headings FOR ALL USING (true) WITH CHECK (true);
+
+-- 8. Add heading_id and sort_order to quotes
+ALTER TABLE quotes ADD COLUMN IF NOT EXISTS heading_id UUID REFERENCES quote_headings(id) ON DELETE SET NULL;
+ALTER TABLE quotes ADD COLUMN IF NOT EXISTS sort_order INTEGER;
+
+-- 9. Indexes
+CREATE INDEX IF NOT EXISTS idx_quote_headings_book ON quote_headings(book_id);
+CREATE INDEX IF NOT EXISTS idx_quotes_heading ON quotes(heading_id);
+CREATE INDEX IF NOT EXISTS idx_books_type_sort ON books(type, sort_order);

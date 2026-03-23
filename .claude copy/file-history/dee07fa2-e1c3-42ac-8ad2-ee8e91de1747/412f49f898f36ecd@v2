@@ -1,0 +1,76 @@
+import { NextRequest } from 'next/server'
+import Stripe from 'stripe'
+import { createSupabaseAdminClient } from '@/lib/supabase-admin'
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!)
+
+// Next.js App Router: we read the raw body via req.text() so Stripe can
+// verify the webhook signature before we parse anything.
+export async function POST(req: NextRequest) {
+  const body = await req.text()
+  const sig  = req.headers.get('stripe-signature') ?? ''
+
+  let event: Stripe.Event
+  try {
+    event = stripe.webhooks.constructEvent(body, sig, process.env.STRIPE_WEBHOOK_SECRET!)
+  } catch {
+    return Response.json({ error: 'Webhook signature verification failed' }, { status: 400 })
+  }
+
+  const admin = createSupabaseAdminClient()
+
+  // Helper: resolve Supabase user ID from sub metadata, falling back to
+  // a customer lookup in case metadata wasn't set (e.g. manual portal action).
+  async function resolveUserId(sub: Stripe.Subscription): Promise<string | null> {
+    if (sub.metadata?.supabase_user_id) return sub.metadata.supabase_user_id
+    const customerId = typeof sub.customer === 'string' ? sub.customer : sub.customer.id
+    const { data } = await admin
+      .from('profiles')
+      .select('id')
+      .eq('stripe_customer_id', customerId)
+      .single()
+    return data?.id ?? null
+  }
+
+  switch (event.type) {
+    case 'checkout.session.completed': {
+      const session = event.data.object as Stripe.Checkout.Session
+      const userId  = session.metadata?.supabase_user_id
+      if (userId) {
+        await admin.from('profiles').upsert({
+          id: userId,
+          subscription_status: 'pro',
+          stripe_customer_id: typeof session.customer === 'string' ? session.customer : null,
+        })
+      }
+      break
+    }
+
+    case 'customer.subscription.updated': {
+      const sub    = event.data.object as Stripe.Subscription
+      const userId = await resolveUserId(sub)
+      if (userId) {
+        const isPro = sub.status === 'active' || sub.status === 'trialing'
+        await admin
+          .from('profiles')
+          .update({ subscription_status: isPro ? 'pro' : 'free' })
+          .eq('id', userId)
+      }
+      break
+    }
+
+    case 'customer.subscription.deleted': {
+      const sub    = event.data.object as Stripe.Subscription
+      const userId = await resolveUserId(sub)
+      if (userId) {
+        await admin
+          .from('profiles')
+          .update({ subscription_status: 'free' })
+          .eq('id', userId)
+      }
+      break
+    }
+  }
+
+  return Response.json({ received: true })
+}

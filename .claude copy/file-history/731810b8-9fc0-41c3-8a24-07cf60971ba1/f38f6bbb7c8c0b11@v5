@@ -1,0 +1,91 @@
+import { NextRequest } from 'next/server'
+import { supabase } from '@/lib/supabase'
+import { buildAllSchedules } from '@/lib/scheduling'
+import type { Book } from '@/types'
+
+export async function GET() {
+  const { data, error } = await supabase
+    .from('books')
+    .select('*')
+    .order('created_at', { ascending: false })
+  if (error) return Response.json({ error: error.message }, { status: 500 })
+  return Response.json(data)
+}
+
+export async function POST(req: NextRequest) {
+  const body = await req.json()
+  const {
+    title,
+    type = 'book',
+    current_page = 0,
+    total_pages,
+    sessions_per_week = 3,
+  } = body
+
+  if (!title) {
+    return Response.json({ error: 'title is required' }, { status: 400 })
+  }
+  if (type === 'book' && !total_pages) {
+    return Response.json({ error: 'total_pages is required for books' }, { status: 400 })
+  }
+
+  // Compute sort_order: next available slot among active books of this type
+  const { data: existingBooks } = await supabase
+    .from('books')
+    .select('sort_order')
+    .eq('status', 'active')
+    .eq('type', type)
+
+  const maxOrder = Math.max(0, ...((existingBooks ?? []).map((b: { sort_order: number | null }) => b.sort_order ?? 0)))
+  const sort_order = maxOrder + 1
+
+  const { data: book, error: bookError } = await supabase
+    .from('books')
+    .insert({
+      title,
+      type,
+      current_page,
+      total_pages: total_pages ?? 0,
+      sessions_per_week,
+      status: 'active',
+      sort_order,
+    })
+    .select()
+    .single()
+  if (bookError) return Response.json({ error: bookError.message }, { status: 500 })
+
+  // Articles are never scheduled
+  if (type === 'article') {
+    return Response.json({ book, sessionCount: 0 }, { status: 201 })
+  }
+
+  // Rebuild all schedules so the new book gets its correct slot (Primary or Secondary)
+  const { data: allBooksData } = await supabase
+    .from('books')
+    .select('*')
+    .eq('status', 'active')
+
+  const allBooks = (allBooksData as Book[]) ?? []
+
+  // Wipe all upcoming sessions for active books
+  if (allBooks.length > 0) {
+    await supabase
+      .from('sessions')
+      .delete()
+      .in('book_id', allBooks.map(b => b.id))
+      .eq('is_completed', false)
+  }
+
+  const allRows = buildAllSchedules(allBooks)
+
+  let sessionCount = 0
+  if (allRows.length > 0) {
+    const CHUNK = 200
+    for (let i = 0; i < allRows.length; i += CHUNK) {
+      await supabase.from('sessions').insert(allRows.slice(i, i + CHUNK))
+    }
+    sessionCount = allRows.length
+  }
+
+  return Response.json({ book, sessionCount }, { status: 201 })
+}

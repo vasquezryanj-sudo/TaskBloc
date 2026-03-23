@@ -1,0 +1,54 @@
+'use client'
+
+import { format, parseISO } from 'date-fns'
+import Modal from './Modal'
+import type { Book, Session } from '@/types'
+
+interface Props {
+  session: Session & { book: Book }
+  onClose: () => void
+  onComplete: () => void
+  onEdit: () => void
+}
+
+export default function SessionDetailModal({ session, onClose, onComplete, onEdit }: Props) {
+  const pageCount = session.pages_end - session.pages_start + 1
+  const pctAfter = session.book.total_pages > 0
+    ? Math.round((session.pages_end / session.book.total_pages) * 100)
+    : 0
+
+  return (
+    <Modal title="Reading Session" onClose={onClose}>
+      <div className="space-y-5">
+        <div className="bg-ripple-900/30 rounded-xl border border-ripple-800/40 px-4 py-4 space-y-1">
+          <p className="font-semibold text-well-50 text-base">{session.book.title}</p>
+          <p className="text-sm text-well-300">
+            {format(parseISO(session.scheduled_date), 'EEEE, MMMM d')}
+          </p>
+          <p className="text-sm text-well-400 mt-2">
+            pp. {session.pages_start}–{session.pages_end}
+            <span className="mx-2">·</span>
+            {pageCount} pages
+            <span className="mx-2">·</span>
+            {pctAfter}% of book
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={() => { onClose(); onEdit() }}
+            className="border border-well-800 text-well-300 px-4 py-2.5 rounded-lg text-sm hover:bg-well-800/60 transition-colors"
+          >
+            Edit date / pages
+          </button>
+          <button
+            onClick={() => { onClose(); onComplete() }}
+            className="bg-ripple-600 hover:bg-ripple-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-all shadow-[0_0_12px_rgba(8,116,224,0.2)]"
+          >
+            ✓ Mark Complete
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}

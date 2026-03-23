@@ -1,0 +1,165 @@
+'use client'
+
+import { useEffect, useRef, useState } from 'react'
+import { supabase } from '@/lib/supabase'
+import type { Quote } from '@/types'
+
+interface Props {
+  quotes: Quote[]
+  bookId: string
+  onInsert: (quoteId: string) => void
+  onClose: () => void
+  onQuoteAdded: (quote: Quote) => void
+}
+
+export default function LinkQuoteModal({ quotes, bookId, onInsert, onClose, onQuoteAdded }: Props) {
+  const [search, setSearch] = useState('')
+  const [addingNew, setAddingNew] = useState(false)
+  const [newText, setNewText] = useState('')
+  const [newPage, setNewPage] = useState('')
+  const [saving, setSaving] = useState(false)
+  const searchRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    searchRef.current?.focus()
+  }, [])
+
+  // Close on Escape
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const filtered = quotes.filter(q =>
+    q.quote_text.toLowerCase().includes(search.toLowerCase())
+  )
+
+  async function handleSaveNew() {
+    if (!newText.trim()) return
+    setSaving(true)
+    const { data, error } = await supabase
+      .from('quotes')
+      .insert({
+        book_id: bookId,
+        quote_text: newText.trim(),
+        page_number: newPage ? Number(newPage) : null,
+        tags: [],
+      })
+      .select()
+      .single()
+    setSaving(false)
+    if (error || !data) return
+    const quote = { ...data, tags: data.tags ?? [] } as Quote
+    onQuoteAdded(quote)
+    onInsert(quote.id)
+  }
+
+  return (
+    <div
+      className="fixed inset-0 bg-navy-900/50 backdrop-blur-sm flex items-center justify-center z-[60] p-4"
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div className="bg-white rounded-2xl shadow-[0_24px_80px_rgba(14,30,53,0.25)] w-full max-w-md flex flex-col max-h-[70vh]">
+
+        {/* Header */}
+        <div className="px-5 pt-5 pb-3 border-b border-fog-200 shrink-0">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-navy-900">Link a Quote</h3>
+            <button
+              onClick={onClose}
+              className="text-fog-400 hover:text-navy-600 text-xl leading-none transition-colors"
+            >×</button>
+          </div>
+          {!addingNew && (
+            <input
+              ref={searchRef}
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search quotes…"
+              className="w-full bg-fog-100 border border-fog-300 rounded-lg px-3 py-2 text-sm text-navy-900 placeholder:text-fog-400 focus:outline-none focus:ring-2 focus:ring-navy-500/20 transition-all"
+            />
+          )}
+        </div>
+
+        {addingNew ? (
+          /* ── New quote form ── */
+          <div className="px-5 py-4 flex flex-col gap-3">
+            <p className="text-xs text-fog-500 font-medium">New quote</p>
+            <textarea
+              autoFocus
+              value={newText}
+              onChange={e => setNewText(e.target.value)}
+              placeholder="Paste or type the quote…"
+              rows={4}
+              className="w-full bg-fog-100 border border-fog-300 rounded-lg px-3 py-2 text-sm text-navy-900 placeholder:text-fog-400 focus:outline-none focus:ring-2 focus:ring-navy-500/20 resize-none transition-all"
+            />
+            <input
+              type="number"
+              min={1}
+              value={newPage}
+              onChange={e => setNewPage(e.target.value)}
+              placeholder="Page number (optional)"
+              className="w-full bg-fog-100 border border-fog-300 rounded-lg px-3 py-2 text-sm text-navy-900 placeholder:text-fog-400 focus:outline-none focus:ring-2 focus:ring-navy-500/20 transition-all"
+            />
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setAddingNew(false)}
+                className="text-sm text-fog-600 hover:text-navy-700 px-3 py-1.5 rounded-lg transition-colors"
+              >
+                Back
+              </button>
+              <button
+                onClick={handleSaveNew}
+                disabled={saving || !newText.trim()}
+                className="bg-navy-700 hover:bg-navy-800 text-white px-4 py-1.5 rounded-full text-sm font-medium transition-all disabled:opacity-50"
+              >
+                {saving ? 'Saving…' : 'Save & Insert'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          /* ── Quote list ── */
+          <div className="overflow-y-auto flex-1 min-h-0">
+            {filtered.length === 0 ? (
+              <p className="text-sm text-fog-400 text-center py-8">
+                {search ? 'No quotes match.' : 'No quotes yet.'}
+              </p>
+            ) : (
+              <ul>
+                {filtered.map(q => (
+                  <li key={q.id}>
+                    <button
+                      onClick={() => onInsert(q.id)}
+                      className="w-full text-left px-5 py-3 hover:bg-fog-50 transition-colors border-b border-fog-100 last:border-0"
+                    >
+                      <p className="text-sm text-navy-800 leading-snug line-clamp-2">{q.quote_text}</p>
+                      {q.page_number != null && (
+                        <p className="text-xs text-fog-400 mt-0.5">p. {q.page_number}</p>
+                      )}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
+        {/* Footer */}
+        {!addingNew && (
+          <div className="px-5 py-3 border-t border-fog-200 shrink-0">
+            <button
+              onClick={() => setAddingNew(true)}
+              className="w-full flex items-center justify-center gap-1.5 text-sm text-navy-600 hover:text-navy-800 font-medium bg-fog-50 hover:bg-fog-100 rounded-xl py-2.5 transition-all border border-fog-200"
+            >
+              <span className="text-base leading-none">+</span>
+              New Quote
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

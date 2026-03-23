@@ -1,0 +1,92 @@
+'use client'
+
+import { useState } from 'react'
+import Modal from './Modal'
+import type { Session, Book } from '@/types'
+
+interface Props {
+  session: Session & { book: Book }
+  onClose: () => void
+  onSuccess: () => void
+}
+
+export default function CompleteSessionModal({ session, onClose, onSuccess }: Props) {
+  const [actualPage, setActualPage] = useState(String(session.pages_end))
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setError('')
+    setLoading(true)
+
+    const res = await fetch(`/api/sessions/${session.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'complete',
+        actual_end_page: Number(actualPage),
+      }),
+    })
+
+    if (!res.ok) {
+      const data = await res.json()
+      setError(data.error ?? 'Failed to complete session')
+      setLoading(false)
+      return
+    }
+
+    onSuccess()
+    onClose()
+  }
+
+  return (
+    <Modal title="Complete Session" onClose={onClose}>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="bg-blue-50 rounded-lg px-4 py-3 text-sm">
+          <p className="font-medium text-blue-900">{session.book.title}</p>
+          <p className="text-blue-600 mt-0.5">
+            Planned: pp. {session.pages_start}–{session.pages_end}
+          </p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">
+            Actual end page
+          </label>
+          <input
+            type="number"
+            required
+            min={session.pages_start}
+            max={session.book.total_pages}
+            value={actualPage}
+            onChange={e => setActualPage(e.target.value)}
+            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <p className="text-xs text-slate-400 mt-1">
+            Defaults to planned end page. Adjust if you read more or less.
+          </p>
+        </div>
+
+        {error && <p className="text-sm text-red-500">{error}</p>}
+
+        <div className="flex gap-3 pt-1">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 border border-slate-200 text-slate-600 px-4 py-2 rounded-lg text-sm hover:bg-slate-50 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={loading}
+            className="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+          >
+            {loading ? 'Saving…' : 'Mark Complete'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  )
+}

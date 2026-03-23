@@ -1,0 +1,24 @@
+Add a URL link field to the AddItemModal for articles and podcasts only (not books).
+
+Schema:
+- Add migration supabase/migrations/009_add_media_link.sql that adds a nullable text column `media_link` to the `books` table.
+
+AddItemModal changes:
+- For the article and podcast tabs, add a "Link" input field at the top of the form, above the title field.
+- Next to the label, add a small button styled with the app's amber/navy palette that reads "AI ✦" (use a sparkle or wand unicode symbol). Add a tooltip on hover that says "Autofill from link."
+- When the user pastes or types a URL and clicks the AI button, call a new API route POST /api/autofill-media with the URL in the body.
+- While fetching, show a subtle loading state on the AI button (spinner or pulsing opacity). All other fields remain editable during and after autofill.
+- On success, populate whichever fields are returned: title, author (for articles), show_title/guests (for podcasts), publication, article_date, air_date. Do not overwrite any field the user has already manually edited.
+- Fields remain fully editable after autofill.
+
+API route app/api/autofill-media/route.ts:
+- Accept POST with JSON body { url: string, type: 'article' | 'podcast' }
+- Call the Anthropic API (claude-sonnet-4-20250514) with a prompt that includes the URL and asks it to return a JSON object with the fields: title, author, publication, date (ISO string), show_title, guests, description. Tell it to infer what it can from the URL and any publicly known metadata about the source — it does not need to fetch the page.
+- Parse the JSON response and return it to the client. Handle errors gracefully and return a 200 with empty fields if Claude can't parse the URL.
+
+Display after save:
+- In the book type (Book interface), add media_link: string | null.
+- On the collapsed article and podcast cards on the homepage, if media_link is set, show a small "Link to Media" anchor tag (text-xs, amber color, opens in new tab) below the folder pill / author line.
+- Also show it inside the detail popup for articles and podcasts, near the top of the metadata section.
+
+Use ANTHROPIC_API_KEY from environment variables in the API route. Do not expose it to the client.

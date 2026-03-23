@@ -1,0 +1,63 @@
+import { NextRequest } from 'next/server'
+import Anthropic from '@anthropic-ai/sdk'
+
+export async function POST(req: NextRequest) {
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey) {
+    return Response.json({ error: 'ANTHROPIC_API_KEY not configured' }, { status: 500 })
+  }
+
+  let url: string
+  let type: 'article' | 'podcast'
+
+  try {
+    const body = await req.json()
+    url = body.url
+    type = body.type
+    if (!url || !type) throw new Error('missing fields')
+  } catch {
+    return Response.json({ error: 'Invalid request body' }, { status: 400 })
+  }
+
+  try {
+    const client = new Anthropic({ apiKey })
+
+    const prompt = `Given this URL for a${type === 'article' ? 'n article' : ' podcast episode'}: ${url}
+
+Analyze the URL structure and any publicly known metadata about the source (domain, path segments, query parameters, known publications/shows) to infer as much as you can about this ${type}.
+
+Return a JSON object with these fields (use null for any you cannot determine):
+- title: string | null (the title of the ${type === 'article' ? 'article' : 'episode'})
+- author: string | null (the author, for articles)
+- publication: string | null (the publication name, for articles)
+- date: string | null (publication or air date, as a human-readable string like "March 2025")
+- show_title: string | null (the podcast show name, for podcasts)
+- guests: string | null (podcast guests, comma-separated)
+- description: string | null (brief description if inferrable)
+
+Return ONLY the JSON object, no other text.`
+
+    const message = await client.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1024,
+      messages: [{ role: 'user', content: prompt }],
+    })
+
+    const text = message.content
+      .filter((block): block is Anthropic.TextBlock => block.type === 'text')
+      .map(block => block.text)
+      .join('')
+
+    // Extract JSON from the response (handle potential markdown code blocks)
+    const jsonMatch = text.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) {
+      return Response.json({})
+    }
+
+    const parsed = JSON.parse(jsonMatch[0])
+    return Response.json(parsed)
+  } catch (err) {
+    console.error('[autofill-media] Error:', err)
+    return Response.json({})
+  }
+}

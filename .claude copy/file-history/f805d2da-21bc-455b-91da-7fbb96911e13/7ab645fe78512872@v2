@@ -1,0 +1,42 @@
+import { NextRequest } from 'next/server'
+import { createSupabaseServerClient } from '@/lib/supabase-server'
+
+export async function GET(req: NextRequest) {
+  const supabase = await createSupabaseServerClient()
+  const { searchParams } = new URL(req.url)
+  const sourceType = searchParams.get('source_type')
+  const sourceId = searchParams.get('source_id')
+
+  if (!sourceType || !sourceId) {
+    return Response.json({ error: 'source_type and source_id are required' }, { status: 400 })
+  }
+
+  const { data, error } = await supabase
+    .from('connections')
+    .select('*')
+    .eq('source_type', sourceType)
+    .eq('source_id', sourceId)
+    .order('created_at', { ascending: true })
+
+  if (error) return Response.json({ error: error.message }, { status: 500 })
+  return Response.json(data)
+}
+
+export async function POST(req: NextRequest) {
+  const supabase = await createSupabaseServerClient()
+  const body = await req.json()
+  const { source_type, source_id, target_type, target_id, note } = body
+
+  if (!source_type || !source_id || !target_type || !target_id) {
+    return Response.json({ error: 'source_type, source_id, target_type, target_id are required' }, { status: 400 })
+  }
+
+  const { data, error } = await supabase
+    .from('connections')
+    .insert({ source_type, source_id, target_type, target_id, note: note ?? null })
+    .select()
+    .single()
+
+  if (error) return Response.json({ error: error.message }, { status: 500 })
+  return Response.json(data, { status: 201 })
+}

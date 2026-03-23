@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', sans-serif; background: white; color: #0d1426; }
+  .card { background: white; padding: 1.75rem 2.25rem; max-width: 760px; margin: 0 auto; }
+  .print-header { display:flex; align-items:center; justify-content:space-between; padding-bottom:1.25rem; margin-bottom:1.75rem; border-bottom:2px solid #c4a55a; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .print-logo { height:60px; width:auto; }
+  .print-meta { text-align:right; font-size:0.73rem; color:#555; line-height:1.7; }
+  .print-meta strong { color:#0d1426; display:block; }
+  .risk-badge { display:inline-flex; align-items:center; gap:0.45rem; padding:0.28rem 0.85rem; border-radius:100px; font-size:0.7rem; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; margin-bottom:0.55rem; border:1px solid; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .legal-disclaimer { margin:0.4rem 0 1.35rem; padding:0.55rem 0.9rem; border-left:2px solid #c4a55a; font-size:0.74rem; color:#6b7280; font-style:italic; line-height:1.65; font-weight:300; }
+  .results-headline { font-family:'Playfair Display',serif; font-size:1.9rem; font-weight:400; color:#0d1426; line-height:1.2; }
+  .results-headline em { font-style:italic; color:#a8893f; }
+  .divider-gold { width:48px; height:2px; background:#c4a55a; margin:1rem 0; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .accordion-sections { display:flex; flex-direction:column; gap:0; margin-top:0.75rem; }
+  .accordion-row { border:none; margin-bottom:0; page-break-inside:avoid; break-inside:avoid; }
+  .accordion-row + .accordion-row { page-break-before:always; break-before:page; }
+  .accordion-header { width:100%; display:flex; justify-content:space-between; align-items:center; padding:0 0 0.5rem 0; background:none; border:none; border-bottom:1px solid #e5dcc5; margin-bottom:0.75rem; font-family:'Inter',sans-serif; }
+  .accordion-label { font-size:0.66rem; text-transform:uppercase; letter-spacing:0.14em; color:#a8893f; font-weight:700; }
+  .accordion-body-inner { padding:0 0 0.25rem 0; }
+  .summary-text { font-size:0.91rem; color:#374151; line-height:1.7; font-weight:300; }
+  .frameworks { display:flex; flex-direction:column; gap:0.35rem; }
+  .fw-item { display:flex; align-items:flex-start; gap:0.9rem; padding:0.5rem 0.75rem; border-radius:10px; background:#f9f7f1; border:1px solid #e5dcc5; page-break-inside:avoid; break-inside:avoid; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .fw-badge { font-size:0.62rem; font-weight:700; letter-spacing:0.07em; text-transform:uppercase; padding:0.18rem 0.48rem; border-radius:4px; white-space:nowrap; margin-top:3px; flex-shrink:0; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .fw-high { background:#fef9ee; color:#a8893f; }
+  .fw-medium { background:#f3f4f6; color:#4b5563; }
+  .fw-low { background:#f9fafb; color:#6b7280; }
+  .fw-name { font-weight:700; font-size:0.88rem; color:#0d1426; margin-bottom:0.15rem; }
+  .fw-reason { font-size:0.78rem; color:#374151; line-height:1.5; font-weight:300; margin-top:0.1rem; }
+  .sublabel { font-size:0.77rem; color:#6b7280; margin-bottom:0.5rem; font-style:italic; }
+  .priority-list, .action-list { display:flex; flex-direction:column; gap:0.35rem; }
+  .priority-item { padding:0.6rem 0.85rem; border-radius:10px; background:#f9f7f1; border:1px solid #e5dcc5; border-left:3px solid #c4a55a; page-break-inside:avoid; break-inside:avoid; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .action-item { padding:0.6rem 0.85rem; border-radius:10px; background:#fafaf8; border:1px solid #ede8d8; border-left:3px solid #c4a55a; page-break-inside:avoid; break-inside:avoid; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .item-title { font-weight:600; font-size:0.87rem; color:#0d1426; margin-bottom:0.2rem; }
+  .item-desc { font-size:0.78rem; color:#374151; line-height:1.5; font-weight:300; }
+  .juris-box { background:#f9f7f1; border:1px solid #e5dcc5; border-radius:10px; overflow:hidden; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .juris-block { padding:0.6rem 0.85rem; page-break-inside:avoid; break-inside:avoid; }
+  .juris-jurisdiction { font-size:0.62rem; text-transform:uppercase; letter-spacing:0.12em; color:#a8893f; font-weight:700; margin-bottom:0.35rem; }
+  .juris-note-text { font-size:0.86rem; color:#374151; line-height:1.7; font-weight:300; }
+  .juris-divider { height:1px; background:#e5dcc5; }
+  .consult-section { page-break-before:always; break-before:page; }
+  .section-label { font-size:0.66rem; text-transform:uppercase; letter-spacing:0.14em; color:#a8893f; font-weight:700; margin-bottom:0.8rem; }
+  .consult-box { background:#f9f7f1; border:1px solid #e5dcc5; border-radius:12px; padding:1.5rem 1.6rem; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .consult-title { font-family:'Playfair Display',serif; font-size:1.1rem; font-weight:600; color:#0d1426; margin-bottom:0.5rem; }
+  .consult-body { font-size:0.83rem; color:#374151; line-height:1.6; margin-bottom:0.75rem; font-weight:300; }
+  .consult-name { font-size:0.88rem; color:#0d1426; font-weight:600; margin-bottom:0.2rem; }
+  .consult-email a { font-size:0.85rem; color:#a8893f; text-decoration:none; }
+</style>
+</head>
+<body>
+<div class="card">
+
+  <div class="print-header">
+    <img src="file:///Users/ryanvasquez/Desktop/compass-ai/public/logo.png" class="print-logo" alt="Compass AI" />
+    <div class="print-meta">
+      <strong>Compass AI Governance Profile</strong>
+      Prepared by Ryan Vasquez<br>
+      AI Governance Consultant<br>
+      vasquezryanj@gmail.com<br>
+      March 10, 2026
+    </div>
+  </div>
+
+  <div class="risk-badge" style="color:#c2410c;background:rgba(194,65,12,0.08);border-color:rgba(194,65,12,0.4)">High Risk Profile</div>
+  <div class="legal-disclaimer">This profile is generated for informational purposes only and does not constitute legal advice. Consult a qualified attorney or compliance professional before making governance decisions.</div>
+  <div class="results-headline">Your <em>Governance</em> Profile</div>
+  <div class="divider-gold"></div>
+
+  <div class="accordion-sections">
+
+    <div class="accordion-row">
+      <div class="accordion-header"><span class="accordion-label">Overview</span></div>
+      <div class="accordion-body"><div class="accordion-body-inner">
+        <p class="summary-text">Your organization operates in a high-risk regulatory environment, deploying AI systems that process personal health data and make consequential decisions affecting individuals. Federal and state law impose strict obligations on how you collect, process, and act on that data. Your current governance posture — informal practices with no documentation — creates real legal and reputational exposure that needs to be addressed immediately. This is not optional; it is a compliance requirement with enforceable consequences.</p>
+      </div></div>
+    </div>
+
+    <div class="accordion-row">
+      <div class="accordion-header"><span class="accordion-label">Applicable Frameworks and Regulations</span></div>
+      <div class="accordion-body"><div class="accordion-body-inner">
+        <div class="frameworks">
+          <div class="fw-item">
+            <span class="fw-badge fw-high">High</span>
+            <div><div class="fw-name">HIPAA</div><div class="fw-reason">Your AI systems process protected health information. HIPAA requires you to implement administrative, physical, and technical safeguards, conduct risk assessments, and maintain policies governing how PHI is used in automated systems.</div></div>
+          </div>
+          <div class="fw-item">
+            <span class="fw-badge fw-high">High</span>
+            <div><div class="fw-name">NIST AI RMF</div><div class="fw-reason">As a U.S.-based organization with high-impact AI use cases, the NIST AI Risk Management Framework provides the most practical structure for building a governance program, covering how to identify, assess, and manage AI risks across your operations.</div></div>
+          </div>
+          <div class="fw-item">
+            <span class="fw-badge fw-medium">Medium</span>
+            <div><div class="fw-name">GDPR</div><div class="fw-reason">If any individuals whose data you process are located in the EU or UK, GDPR applies. Its Article 22 requirements around automated decision-making are directly relevant to your AI use cases.</div></div>
+          </div>
+          <div class="fw-item">
+            <span class="fw-badge fw-medium">Medium</span>
+            <div><div class="fw-name">FDA AI/ML Guidance</div><div class="fw-reason">If your AI tools assist in clinical decision-making or qualify as software as a medical device, FDA guidance on AI/ML-enabled medical devices requires pre-market review and ongoing monitoring obligations.</div></div>
+          </div>
+          <div class="fw-item">
+            <span class="fw-badge fw-low">Low</span>
+            <div><div class="fw-name">ISO/IEC 42001</div><div class="fw-reason">As you mature your governance program, ISO 42001 provides a certifiable management system standard that can demonstrate your commitment to responsible AI to partners, regulators, and the public.</div></div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+
+    <div class="accordion-row">
+      <div class="accordion-header"><span class="accordion-label">Strategic Priorities</span></div>
+      <div class="accordion-body"><div class="accordion-body-inner">
+        <p class="sublabel">Medium-term goals to build toward over the next 3 to 12 months.</p>
+        <div class="priority-list">
+          <div class="priority-item"><div class="item-title">Establish a Formal AI Governance Program</div><div class="item-desc">Document your AI use cases, assign ownership, and create written policies governing how AI is used. This is the foundation for every other compliance obligation you face.</div></div>
+          <div class="priority-item"><div class="item-title">Conduct a HIPAA Risk Assessment for AI Systems</div><div class="item-desc">Map which AI tools process PHI, assess the security risks, and document your findings and mitigation steps. This is a legal requirement, not just good practice.</div></div>
+          <div class="priority-item"><div class="item-title">Build Internal AI Accountability Structures</div><div class="item-desc">Designate a responsible owner for AI governance, establish cross-functional oversight, and create a process for reviewing new AI deployments before they go live.</div></div>
+          <div class="priority-item"><div class="item-title">Prepare for Third-Party Audits and Certification</div><div class="item-desc">Given your regulatory exposure, preparing your documentation and processes for potential audit should be a 12-month goal.</div></div>
+        </div>
+      </div></div>
+    </div>
+
+    <div class="accordion-row">
+      <div class="accordion-header"><span class="accordion-label">Immediate Actions</span></div>
+      <div class="accordion-body"><div class="accordion-body-inner">
+        <p class="sublabel">Concrete steps you can take in the next 30 to 90 days.</p>
+        <div class="action-list">
+          <div class="action-item"><div class="item-title">Inventory All AI Tools in Use</div><div class="item-desc">Create a complete list of every AI system your organization uses, including third-party tools. Note what data each accesses, who uses it, and what decisions it influences.</div></div>
+          <div class="action-item"><div class="item-title">Draft an AI Use Policy</div><div class="item-desc">Write a one-page internal policy defining what AI tools are approved, what data they may access, and who has authority to deploy new AI systems.</div></div>
+          <div class="action-item"><div class="item-title">Identify Your HIPAA Compliance Gaps</div><div class="item-desc">Review your existing HIPAA policies and check whether they address AI systems. If they do not, flag this for your compliance officer and begin updating them.</div></div>
+          <div class="action-item"><div class="item-title">Assign a Governance Owner</div><div class="item-desc">Designate one person — or a small working group — responsible for AI governance. Even a part-time assignment is far better than no ownership at all.</div></div>
+        </div>
+      </div></div>
+    </div>
+
+    <div class="accordion-row">
+      <div class="accordion-header"><span class="accordion-label">Jurisdictional Note</span></div>
+      <div class="accordion-body"><div class="accordion-body-inner">
+        <div class="juris-box">
+          <div class="juris-block">
+            <div class="juris-jurisdiction">United States — Federal</div>
+            <div class="juris-note-text">HIPAA applies to all covered entities and their business associates. Any AI vendor that processes PHI on your behalf must sign a Business Associate Agreement. The HHS Office for Civil Rights enforces HIPAA and has issued guidance specifically addressing AI and algorithmic tools in healthcare settings.</div>
+          </div>
+          <div class="juris-divider"></div>
+          <div class="juris-block">
+            <div class="juris-jurisdiction">United States — State</div>
+            <div class="juris-note-text">Several states, including California, Colorado, and Illinois, have enacted or are enacting AI-specific laws that impose additional obligations on organizations using automated decision systems. California's CCPA and CPRA add data rights obligations for California residents that are separate from and in addition to HIPAA's requirements.</div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+
+  </div>
+
+  <div class="consult-section">
+    <div class="section-label">Work With a Consultant</div>
+    <div class="consult-box">
+      <div class="consult-title">Take the next step with expert guidance.</div>
+      <p class="consult-body">This profile gives you a clear picture of where your organization stands. Translating it into a governance program that actually protects your organization and the people you serve takes expertise. Ryan Vasquez is an AI governance consultant specializing in regulatory compliance, ethical AI frameworks, and organizational policy development. Reach out to discuss your specific situation.</p>
+      <div class="consult-name">Ryan Vasquez, AI Governance Consultant</div>
+      <div class="consult-email"><a href="mailto:vasquezryanj@gmail.com">vasquezryanj@gmail.com</a></div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

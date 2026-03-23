@@ -1,0 +1,61 @@
+'use client'
+
+import type { Quote } from '@/types'
+
+const QUOTE_TAG = /\[quote:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\]/g
+
+function quotePreview(text: string): string {
+  const words = text.trim().split(/\s+/).slice(0, 6).join(' ')
+  return text.trim().split(/\s+/).length > 6 ? words + '…' : words
+}
+
+interface Props {
+  text: string
+  quotes: Quote[]
+  onChipClick: (quoteId: string) => void
+  className?: string
+}
+
+export default function NoteRenderer({ text, quotes, onChipClick, className }: Props) {
+  const quoteMap = new Map(quotes.map(q => [q.id, q]))
+
+  // Split the text on [quote:uuid] tags, keeping the delimiters
+  const segments = text.split(QUOTE_TAG)
+  // split with a capturing group alternates: [text, id, text, id, text …]
+
+  const nodes: React.ReactNode[] = []
+  for (let i = 0; i < segments.length; i++) {
+    if (i % 2 === 0) {
+      // Plain text segment — preserve whitespace
+      if (segments[i]) nodes.push(<span key={i}>{segments[i]}</span>)
+    } else {
+      // UUID segment
+      const id = segments[i]
+      const quote = quoteMap.get(id)
+      if (quote) {
+        nodes.push(
+          <button
+            key={i}
+            type="button"
+            onClick={() => onChipClick(id)}
+            className="inline-flex items-center gap-1 px-2 py-0.5 mx-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-300 text-xs font-medium hover:bg-amber-200 transition-colors align-baseline cursor-pointer"
+            title={quote.quote_text}
+          >
+            <span className="shrink-0 opacity-60">&ldquo;</span>
+            {quotePreview(quote.quote_text)}
+          </button>
+        )
+      } else {
+        // Quote was deleted — render nothing
+      }
+    }
+  }
+
+  return (
+    <div
+      className={className ?? 'w-full min-h-[400px] bg-fog-100 rounded-xl border border-fog-300 px-5 py-4 text-sm text-navy-900 leading-relaxed whitespace-pre-wrap'}
+    >
+      {nodes}
+    </div>
+  )
+}

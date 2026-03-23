@@ -1,0 +1,5 @@
+# Fill in your Supabase credentials before running the app.
+# Find these in: Supabase Dashboard → Project Settings → API
+
+NEXT_PUBLIC_SUPABASE_URL=https://fvpzulzxraiarfvfpgcr.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ2cHp1bHp4cmFpYXJmdmZwZ2NyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE5NjAzMzYsImV4cCI6MjA4NzUzNjMzNn0.DFvWmAgVJtTt1PJNLTZx5cWdFMK5DFs1m7XGl0UkaxQ
