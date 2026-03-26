@@ -789,7 +789,7 @@ function App(){
   const days=next8();
   const [tasks,setTasks]=useState({});
   const [forward,setForward]=useState([]);
-  const [sel,setSel]=useState(0);
+  const [sel,setSel]=useState(()=>{const t=new Date().toDateString();const i=days.findIndex(d=>d.toDateString()===t);return i>=0?i:0;});
   const [editing,setEditing]=useState(null);
   const [editFwd,setEditFwd]=useState(null);
   const [mobTab,setMobTab]=useState('today');
