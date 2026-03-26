@@ -1,4 +1,4 @@
-const CACHE = 'taskbloc-v12';
+const CACHE = 'taskbloc-v13';
 const ASSETS = [
   '/TaskBloc/',
   '/TaskBloc/index.html',

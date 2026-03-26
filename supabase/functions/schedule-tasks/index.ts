@@ -100,6 +100,13 @@ function minutesToISO(dateStr: string, minutes: number, tz: string): string {
   return `${dateStr}T${h}:${m}:00`;
 }
 
+function timeToMins(est: string): number {
+  const map: Record<string, number> = { "<5m": 5, "5m": 5, "10m": 10, "15m": 15, "30m": 30, "1hr": 60, "1.5hr": 90, "2hr": 120 };
+  if (map[est] !== undefined) return map[est];
+  const n = parseInt(est, 10);
+  return isNaN(n) || n <= 0 ? 30 : n;
+}
+
 // ── Main handler ──
 
 Deno.serve(async () => {
@@ -168,7 +175,7 @@ Deno.serve(async () => {
       // Skip if a calendar event with this title already exists
       if (existingTitles.has(task.name?.trim().toLowerCase())) continue;
 
-      const duration = task.estimate ? parseInt(task.estimate, 10) : 30;
+      const duration = task.estimate ? timeToMins(task.estimate) : 30;
       if (isNaN(duration) || duration <= 0) continue;
 
       // Advance to a gap that can fit this task
