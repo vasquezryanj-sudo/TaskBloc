@@ -104,7 +104,7 @@ function minutesToISO(dateStr: string, minutes: number, tz: string): string {
 
 Deno.serve(async () => {
   try {
-    const tz = "America/Chicago"; // user's local timezone
+    const tz = "America/New_York"; // user's local timezone
     const dayKey = todayKey(tz);
     const dateStr = todayISO(tz);
     const DAY_START = 9 * 60; // 9am
