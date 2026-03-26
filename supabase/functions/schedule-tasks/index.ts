@@ -189,9 +189,19 @@ Deno.serve(async () => {
       const startTime = minutesToISO(dateStr, cursor, tz);
       const endTime = minutesToISO(dateStr, cursor + duration, tz);
 
+      const descLines: string[] = [];
+      if (task.status) descLines.push(`Status: ${task.status}`);
+      if (task.start) descLines.push(`Start: ${task.start}`);
+      if (task.due) descLines.push(`Due: ${task.due}`);
+      if (task.estimate) descLines.push(`Estimate: ${task.estimate}`);
+      if (task.tags && task.tags.length > 0) descLines.push(`Tags: ${task.tags.join(", ")}`);
+      if (task.context) descLines.push(`Notes: ${task.context}`);
+      if (task.attachments && task.attachments.length > 0) descLines.push(`Attachments: ${task.attachments.map((a: any) => a.name || a.url || a).join(", ")}`);
+      descLines.push("", "Auto-scheduled by TaskBloc");
+
       const eventBody = {
         summary: task.name,
-        description: `Auto-scheduled by TaskBloc`,
+        description: descLines.join("\n"),
         colorId: "6",
         start: { dateTime: startTime, timeZone: tz },
         end: { dateTime: endTime, timeZone: tz },
