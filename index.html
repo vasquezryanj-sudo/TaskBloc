@@ -1033,7 +1033,7 @@ function App(){
   const getRolloverDate=()=>localStorage.getItem(ROLLOVER_KEY)||'';
   const setRolloverDate=()=>localStorage.setItem(ROLLOVER_KEY,new Date().toDateString());
 
-  const getStaleTasks=()=>{
+  const getPastIncompleteTasks=()=>{
     const todayKey=dk(new Date());
     const stale=[];
     Object.entries(tasks).forEach(([dayKey,ts])=>{
@@ -1043,12 +1043,6 @@ function App(){
         stale.push({...t,sourceDayKey:dayKey,sourceDayLabel:DAYS[d.getDay()]+' '+MS[d.getMonth()]+' '+d.getDate()});
       });
     });
-    // also incomplete from today if it's past 9pm
-    if(new Date().getHours()>=21){
-      (tasks[todayKey]||[]).filter(t=>!t.complete).forEach(t=>{
-        stale.push({...t,sourceDayKey:todayKey,sourceDayLabel:'Today'});
-      });
-    }
     return stale;
   };
 
@@ -1057,23 +1051,18 @@ function App(){
     rolloverChecked.current=true;
     const today=new Date().toDateString();
     if(getRolloverDate()===today)return;
-    const hour=new Date().getHours();
-    const stale=getStaleTasks();
-    if(stale.length>0&&hour>=21){setShowRollover(true);return;}
-    // past-day incomplete tasks available any time
-    const todayKey=dk(new Date());
-    const hasPastIncomplete=Object.entries(tasks).some(([k,ts])=>k<todayKey&&ts.some(t=>!t.complete));
-    if(hasPastIncomplete){setShowRollover(true);return;}
+    const stale=getPastIncompleteTasks();
+    if(stale.length>0){setShowRollover(true);return;}
   },[syncStatus,tasks]);
 
-  // 9pm timer trigger
+  // 9pm timer trigger — re-check for past incomplete tasks at 9pm
   useEffect(()=>{
     const now=new Date();const nine=new Date();nine.setHours(21,0,0,0);
     if(now>=nine)return;
     const ms=nine-now;
     const timer=setTimeout(()=>{
       if(getRolloverDate()===new Date().toDateString())return;
-      const stale=getStaleTasks();
+      const stale=getPastIncompleteTasks();
       if(stale.length>0)setShowRollover(true);
     },ms);
     return()=>clearTimeout(timer);
@@ -1211,7 +1200,7 @@ function App(){
     {editing&&<TaskModal task={editing.task} onClose={()=>setEditing(null)} onSave={u=>{saveTask(editing.dayKey,u);setEditing(null);}} onDelete={()=>delTask(editing.dayKey,editing.task.id)} projects={projects} onCreateProject={createProject}/>}
     {editFwd&&<TaskModal task={editFwd} onClose={()=>setEditFwd(null)} onSave={u=>{saveFwd(u);setEditFwd(null);}} onDelete={()=>delFwd(editFwd.id)} projects={projects} onCreateProject={createProject}/>}
     {(addMediaModal||editMedia)&&<MediaEntryModal entry={editMedia||{}} onClose={()=>{setAddMediaModal(false);setEditMedia(null);}} onSave={item=>{editMedia?updateMedia(item):addMedia(item);setAddMediaModal(false);setEditMedia(null);}} onDelete={editMedia?()=>{removeMedia(editMedia.id);setEditMedia(null);}:undefined}/>}
-    {showRollover&&<RolloverReview staleTasks={getStaleTasks()} onMoveTo={rolloverMoveTo} onMoveToForward={rolloverMoveToForward} onDiscard={rolloverDiscard} onClose={closeRollover}/>}
+    {showRollover&&<RolloverReview staleTasks={getPastIncompleteTasks()} onMoveTo={rolloverMoveTo} onMoveToForward={rolloverMoveToForward} onDiscard={rolloverDiscard} onClose={closeRollover}/>}
   </div>);
 }
 
