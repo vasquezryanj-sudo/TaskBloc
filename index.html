@@ -42,7 +42,7 @@ body{background-image:radial-gradient(ellipse at 15% 80%,rgba(192,72,32,0.04) 0%
 .sidebar-section{font-weight:700;font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:var(--text3);padding:14px 10px 6px;}
 .s-day{padding:9px 10px;border-radius:10px;cursor:pointer;transition:all .2s cubic-bezier(.4,0,.2,1);border:1.5px solid transparent;position:relative;}
 .s-day:hover{background:var(--surface2);transform:translateX(2px);}
-.s-day.active{background:var(--surface2);border-color:var(--border);box-shadow:0 1px 4px var(--shadow);}
+.s-day.active{background:var(--surface2);border-color:var(--border);box-shadow:0 1px 4px var(--shadow);position:relative;z-index:1;transform:translateY(-1px);}
 .s-day.today{border-color:var(--accent)!important;background:var(--accent-light);}
 .s-day-label{font-weight:700;font-size:9px;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3);transition:color .2s;}
 .s-day.today .s-day-label{color:var(--accent);}
@@ -619,7 +619,7 @@ function TaskItem({task,onToggle,onOpen,onDragStart,onDragOver,onDrop,isDragging
       <div className="task-name-row"><div className="task-name">{task.name}</div>{task.estimate&&<span className="estimate-tag">{task.estimate}</span>}</div>
       {task.status&&<div className="task-status">{task.status}</div>}
       {((task.tags&&task.tags.length>0)||task.start||task.due)&&<div className="task-meta-row">
-        {(task.tags||[]).map((t,i)=>{const n=tagName(t);const p=(projects||[]).find(pr=>pr.name===n);const c=p?p.color:'var(--text3)';return <span key={i} className="tag-chip" style={{background:c+'22',border:`1px solid ${c}`,color:c,fontSize:'8px',padding:'1px 5px'}}>{n}</span>;})}
+        {(task.tags||[]).map((t,i)=>{const n=tagName(t);const p=(projects||[]).find(pr=>pr.name===n);const c=p?p.color:'var(--text3)';return <span key={i} title={n} style={{display:'inline-block',width:'4px',height:'14px',borderRadius:'2px',background:c,flexShrink:0}}/>;})}
         {task.start&&<span className="task-date-label">Start: {task.start}</span>}
         {task.due&&<span className="task-date-label">Due: {task.due}</span>}
       </div>}
