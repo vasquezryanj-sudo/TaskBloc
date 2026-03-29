@@ -112,7 +112,7 @@ body{background-image:radial-gradient(ellipse at 15% 80%,rgba(192,72,32,0.04) 0%
 .task-check.on{background:var(--accent2);border-color:var(--accent2);box-shadow:0 0 0 3px rgba(74,136,80,0.15);}
 .task-check.on::after{content:'✓';font-size:10px;color:#fff;font-weight:700;}
 .task-body{flex:1;min-width:0;}
-.task-name{font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.task-name{font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0;}
 .task-status{font-size:10px;color:var(--accent);margin-top:2px;font-style:italic;font-weight:500;}
 .task-meta{display:flex;align-items:center;gap:5px;flex-shrink:0;}
 .attach-badge{font-size:10px;color:var(--text3);}
@@ -126,7 +126,7 @@ body{background-image:radial-gradient(ellipse at 15% 80%,rgba(192,72,32,0.04) 0%
 
 /* WEEK STRIP */
 .strip-label{font-weight:700;font-size:9px;text-transform:uppercase;letter-spacing:1.8px;color:var(--text3);}
-.week-row{display:flex;gap:10px;overflow-x:auto;padding-bottom:6px;scroll-snap-type:x mandatory;}
+.week-row{display:flex;gap:10px;overflow-x:auto;padding:4px 0 6px;scroll-snap-type:x mandatory;}
 .week-card{min-width:145px;background:var(--surface);border:1.5px solid var(--border);border-radius:14px;padding:13px;flex-shrink:0;cursor:pointer;transition:all .25s cubic-bezier(.4,0,.2,1);box-shadow:0 1px 3px var(--shadow),0 3px 10px var(--shadow);scroll-snap-align:start;}
 .week-card:hover{border-color:var(--border2);box-shadow:0 2px 6px var(--shadow),0 6px 20px var(--shadow2);transform:translateY(-3px);}
 .week-card.drop-target{border-color:var(--accent)!important;background:var(--accent-light);}
