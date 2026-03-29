@@ -1162,15 +1162,11 @@ function App(){
       <SyncStatus status={syncStatus} onSync={fullSync}/>
       <div className="sidebar-section">This Week</div>
       {sidebarDays}
-      {forward.length>0&&<><div className="sidebar-section" style={{color:'var(--purple)'}}>Looking Forward</div><div className="s-day" style={{cursor:'default'}}><div className="s-day-count" style={{color:'var(--purple)',fontSize:'10px'}}>{forward.length} task{forward.length!==1?'s':''} parked</div></div></>}
       <div className="sidebar-section" style={{color:'var(--gold)'}}>Projects</div>
       <div className={'s-reading-link'+(mobTab==='projects'?' active':'')} onClick={()=>setMobTab('projects')}>
         <span>📂</span><span className="s-reading-link-label">Projects</span>
       </div>
-      <div className="sidebar-section" style={{color:'var(--accent2)'}}>Reading</div>
-      <div className={'s-reading-link'+(mobTab==='reading'?' active':'')} onClick={()=>{setMobTab('reading');setShowAllCompleted(false);}}>
-        <span>📚</span><span className="s-reading-link-label">Reading List</span>
-      </div>
+      {forward.length>0&&<><div className="sidebar-section" style={{color:'var(--purple)'}}>Looking Forward</div><div className="s-day" style={{cursor:'default'}}><div className="s-day-count" style={{color:'var(--purple)',fontSize:'10px'}}>{forward.length} task{forward.length!==1?'s':''} parked</div></div></>}
     </div>
 
     <div className="main" ref={mainRef}>
