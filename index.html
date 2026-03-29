@@ -1161,7 +1161,7 @@ function App(){
       <div className="sidebar-sub">your days, organized</div>
       <SyncStatus status={syncStatus} onSync={fullSync}/>
       <div className="sidebar-section">This Week</div>
-      {sidebarDays}
+      {sidebarDays.slice(0,3)}
       <div className="sidebar-section" style={{color:'var(--gold)'}}>Projects</div>
       <div className={'s-reading-link'+(mobTab==='projects'?' active':'')} onClick={()=>setMobTab('projects')}>
         <span>📂</span><span className="s-reading-link-label">Projects</span>
