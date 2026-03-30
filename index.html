@@ -621,7 +621,7 @@ function TaskItem({task,onToggle,onOpen,onDragStart,onDragOver,onDrop,isDragging
       <div className={'task-check'+(task.complete?' on':'')}/>
     </div>
     <div className="task-body" onClick={()=>onOpen(task)} style={{cursor:'pointer'}}>
-      <div className="task-name-row"><div className="task-name">{task.name}</div>{task.estimate&&<span className="estimate-tag">{task.estimate}</span>}{(task.tags||[]).map((t,i)=>{const n=tagName(t);const p=(projects||[]).find(pr=>pr.name===n);const c=p?p.color:'var(--text3)';return <span key={i} title={n} style={{display:'inline-block',width:'4px',height:'14px',borderRadius:'2px',background:c,flexShrink:0}}/>;})}</div>
+      <div className="task-name-row"><div className="task-name">{task.name}</div>{task.estimate&&<span className="estimate-tag">{task.estimate}</span>}{(task.tags||[]).map((t,i)=>{const n=tagName(t);const p=(projects||[]).find(pr=>pr.name===n);const c=p?p.color:'var(--text3)';return <span key={i} title={n} style={{display:'inline-block',width:'8px',height:'8px',borderRadius:'50%',background:c,flexShrink:0}}/>;})}</div>
       {task.status&&<div className="task-status">{task.status}</div>}
       {(task.start||task.due)&&<div className="task-meta-row">
         {task.start&&<span className="task-date-label">Start: {task.start}</span>}
