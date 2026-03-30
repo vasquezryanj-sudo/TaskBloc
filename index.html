@@ -210,7 +210,7 @@ body{background-image:radial-gradient(ellipse at 15% 80%,rgba(192,72,32,0.04) 0%
 .a-remove:hover{color:var(--accent);background:var(--accent-light);}
 
 /* SYNC */
-.sync-bar{display:flex;align-items:center;gap:4px;font-size:9px;color:var(--text3);padding:0;margin-bottom:-12px;}
+.sync-bar{display:flex;align-items:center;gap:4px;font-size:9px;color:var(--text3);padding:0;margin-bottom:4px;}
 .sync-dot{width:5px;height:5px;border-radius:50%;background:var(--text3);flex-shrink:0;transition:background .3s;}
 .sync-dot.ok{background:var(--accent2);box-shadow:0 0 4px rgba(74,136,80,0.3);}
 .sync-dot.err{background:#c0392b;box-shadow:0 0 4px rgba(192,57,43,0.3);}
@@ -1243,15 +1243,16 @@ function App(){
       <SyncStatus status={syncStatus} onSync={fullSync}/>
       <div className="sidebar-section">This Week</div>
       {sidebarDays.slice(0,3)}
-      <div className="sidebar-section" style={{color:'var(--gold)'}}>Projects</div>
+      <div style={{height:'1px',background:'linear-gradient(90deg,transparent,var(--border),transparent)',margin:'10px 6px'}}/>
       <div className={'s-reading-link'+(mobTab==='projects'?' active':'')} onClick={()=>setMobTab('projects')}>
         <span>📂</span><span className="s-reading-link-label">Projects</span>
       </div>
-      <div className="sidebar-section" style={{color:'var(--accent2)'}}>Summary</div>
       <div className={'s-reading-link'+(mobTab==='summary'?' active':'')} onClick={()=>setMobTab('summary')}>
         <span>📊</span><span className="s-reading-link-label">Weekly Summary</span>
       </div>
-      {forward.length>0&&<><div className="sidebar-section" style={{color:'var(--purple)'}}>Looking Forward</div><div className="s-day" style={{cursor:'default'}}><div className="s-day-count" style={{color:'var(--purple)',fontSize:'10px'}}>{forward.length} task{forward.length!==1?'s':''} parked</div></div></>}
+      <div className={'s-reading-link'+(mobTab==='forward'?' active':'')} onClick={()=>setMobTab('forward')}>
+        <span>🔭</span><span className="s-reading-link-label">Looking Forward{forward.length>0?' · '+forward.length:''}</span>
+      </div>
     </div>
 
     <div className="main" ref={mainRef}>
