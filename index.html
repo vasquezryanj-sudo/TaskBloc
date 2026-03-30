@@ -464,7 +464,7 @@ async function dbLoadTasks(){
   }
   const{data,error}=await sb.from('tasks').select('*').order('position');
   if(error)throw error;
-  const map={};(data||[]).forEach(r=>{if(!map[r.day_key])map[r.day_key]=[];map[r.day_key].push({id:r.id,name:r.name,status:r.status,context:r.context,complete:r.complete,attachments:r.attachments||[],tags:r.tags||[],due:r.due||'',start:r.start||'',estimate:r.estimate||''});});
+  const map={};(data||[]).forEach(r=>{if(!map[r.day_key])map[r.day_key]=[];map[r.day_key].push({id:r.id,name:r.name,status:r.status,context:r.context,complete:r.complete,attachments:r.attachments||[],tags:r.tags||[],due:r.due||'',estimate:r.estimate||'',recurring:r.recurring||false,recurringFrequency:r.recurring_frequency||''});});
   return map;
 }
 async function dbLoadForward(){
@@ -473,10 +473,10 @@ async function dbLoadForward(){
   }
   const{data,error}=await sb.from('forward_tasks').select('*').order('position');
   if(error)throw error;
-  return(data||[]).map(r=>({id:r.id,name:r.name,status:r.status,context:r.context,complete:r.complete,attachments:r.attachments||[],tags:r.tags||[],due:r.due||'',start:r.start||'',estimate:r.estimate||''}));
+  return(data||[]).map(r=>({id:r.id,name:r.name,status:r.status,context:r.context,complete:r.complete,attachments:r.attachments||[],tags:r.tags||[],due:r.due||'',estimate:r.estimate||'',recurring:r.recurring||false,recurringFrequency:r.recurring_frequency||''}));
 }
 async function dbUpsertTask(task,dayKey,position){
-  const data={id:task.id,day_key:dayKey,name:task.name,status:task.status,context:task.context,complete:task.complete,attachments:task.attachments,tags:task.tags||[],due:task.due||'',start:task.start||'',estimate:task.estimate||'',position};
+  const data={id:task.id,day_key:dayKey,name:task.name,status:task.status,context:task.context,complete:task.complete,attachments:task.attachments,tags:task.tags||[],due:task.due||'',estimate:task.estimate||'',recurring:task.recurring||false,recurring_frequency:task.recurringFrequency||'',position};
   if(!navigator.onLine){qAdd({type:'upsertTask',data});return;}
   try{await sb.from('tasks').upsert(data);}catch(e){qAdd({type:'upsertTask',data});throw e;}
 }
@@ -485,7 +485,7 @@ async function dbDeleteTask(id){
   try{await sb.from('tasks').delete().eq('id',id);}catch(e){qAdd({type:'deleteTask',id});throw e;}
 }
 async function dbUpsertForward(task,position){
-  const data={id:task.id,name:task.name,status:task.status,context:task.context,complete:task.complete,attachments:task.attachments,tags:task.tags||[],due:task.due||'',start:task.start||'',estimate:task.estimate||'',position};
+  const data={id:task.id,name:task.name,status:task.status,context:task.context,complete:task.complete,attachments:task.attachments,tags:task.tags||[],due:task.due||'',estimate:task.estimate||'',recurring:task.recurring||false,recurring_frequency:task.recurringFrequency||'',position};
   if(!navigator.onLine){qAdd({type:'upsertForward',data});return;}
   try{await sb.from('forward_tasks').upsert(data);}catch(e){qAdd({type:'upsertForward',data});throw e;}
 }
@@ -511,16 +511,14 @@ async function dbUpsertProject(project){
 const tagName=t=>typeof t==='string'?t:(t&&t.label)||'';
 
 function Attachments({attachments,onChange}){
-  const [link,setLink]=useState('');const [over,setOver]=useState(false);
+  const [over,setOver]=useState(false);
   const addFiles=fs=>{const n=Array.from(fs).map(f=>({id:uid(),name:f.name,size:f.size,type:'file',url:null}));onChange([...attachments,...n]);};
-  const addLink=()=>{if(!link.trim())return;const url=link.trim();onChange([...attachments,{id:uid(),name:url.replace(/^https?:\/\//,'').split('/')[0],url,type:'link',size:null}]);setLink('');};
   const remove=id=>onChange(attachments.filter(a=>a.id!==id));
   return(<div style={{display:'flex',flexDirection:'column',gap:'9px'}}>
     <div className={'file-drop'+(over?' over':'')} onDragOver={e=>{e.preventDefault();setOver(true);}} onDragLeave={()=>setOver(false)} onDrop={e=>{e.preventDefault();setOver(false);addFiles(e.dataTransfer.files);}}>
       <input type="file" multiple onChange={e=>addFiles(e.target.files)}/><div className="file-drop-icon">📁</div><div className="file-drop-label">Drop files or tap to browse</div><div className="file-drop-sub">Syncs once storage connected</div>
     </div>
-    <div className="link-row"><input className="m-input" placeholder="Paste a link (Drive, Notion, Dropbox…)" value={link} onChange={e=>setLink(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addLink()}/><button className="btn sm" onClick={addLink}>Add</button></div>
-    {attachments.length>0&&<div className="attach-list">{attachments.map(a=>{const{icon,cls}=a.type==='link'?{icon:'🔗',cls:'lnk'}:fIcon(a.name);return(<div key={a.id} className="attach-item"><div className={'a-icon '+cls}>{icon}</div><div className="a-info"><div className="a-name">{a.name}</div><div className="a-meta">{a.type==='link'?a.url:fmtSize(a.size)+' · pending'}</div></div><button className="a-remove" onClick={()=>remove(a.id)}>✕</button></div>);})}</div>}
+    {attachments.length>0&&<div className="attach-list">{attachments.map(a=>{const{icon,cls}=fIcon(a.name);return(<div key={a.id} className="attach-item"><div className={'a-icon '+cls}>{icon}</div><div className="a-info"><div className="a-name">{a.name}</div><div className="a-meta">{fmtSize(a.size)+' · pending'}</div></div><button className="a-remove" onClick={()=>remove(a.id)}>✕</button></div>);})}</div>}
   </div>);
 }
 
@@ -533,8 +531,9 @@ function TaskModal({task,onClose,onSave,onDelete,projects,onCreateProject}){
   const [attachments,setAttachments]=useState(task.attachments||[]);
   const [tags,setTags]=useState(()=>(task.tags||[]).map(tagName));
   const [due,setDue]=useState(task.due||'');
-  const [start,setStart]=useState(task.start||'');
   const [estimate,setEstimate]=useState(task.estimate||'');
+  const [recurring,setRecurring]=useState(task.recurring||false);
+  const [recurringFrequency,setRecurringFrequency]=useState(task.recurringFrequency||'Daily');
   const [confirming,setConfirming]=useState(false);
   const [newProj,setNewProj]=useState(false);
   const [projName,setProjName]=useState('');
@@ -547,11 +546,14 @@ function TaskModal({task,onClose,onSave,onDelete,projects,onCreateProject}){
       <div className="modal-header"><div className="modal-title">{name||'Untitled'}</div><button className="modal-close" onClick={onClose}>✕</button></div>
       <div className="field"><label>Task Name</label><input className="m-input" value={name} onChange={e=>setName(e.target.value)} placeholder="What needs doing?"/></div>
       <div className="field"><label>Status</label><input className="m-input" value={status} onChange={e=>setStatus(e.target.value)} placeholder="in progress, waiting on, blocked…"/></div>
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'10px'}}>
-        <div className="field"><label>Start</label><input className="m-input" value={start} onChange={e=>setStart(e.target.value)} placeholder="Mar 10"/></div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}}>
         <div className="field"><label>Due</label><input className="m-input" value={due} onChange={e=>setDue(e.target.value)} placeholder="Mar 15"/></div>
         <div className="field"><label>Estimate</label><select className="m-input" value={estimate} onChange={e=>setEstimate(e.target.value)}><option value="">— none —</option><option value="&lt;5m">&lt;5m</option><option value="5m">5m</option><option value="10m">10m</option><option value="15m">15m</option><option value="30m">30m</option><option value="1hr">1hr</option><option value="1.5hr">1.5hr</option><option value="2hr">2hr</option></select></div>
       </div>
+      <div className="field"><label>Recurring</label><div style={{display:'flex',alignItems:'center',gap:'10px'}}>
+        <button className={'btn sm'+(recurring?' primary':'')} onClick={()=>setRecurring(r=>!r)}>{recurring?'On':'Off'}</button>
+        {recurring&&<select className="m-input" style={{width:'auto'}} value={recurringFrequency} onChange={e=>setRecurringFrequency(e.target.value)}><option>Daily</option><option>Weekly</option><option>Biweekly</option><option>Monthly</option></select>}
+      </div></div>
       <div className="field">
         <label>Projects</label>
         <div className="tag-chips-wrap">
@@ -575,7 +577,7 @@ function TaskModal({task,onClose,onSave,onDelete,projects,onCreateProject}){
       <div className="field"><label>Attachments{attachments.length>0?' · '+attachments.length:''}</label><Attachments attachments={attachments} onChange={setAttachments}/></div>
       <div className="modal-footer">
         <button className="trash-btn" onClick={()=>setConfirming(true)}>🗑 Delete</button>
-        <div className="footer-right"><button className="btn" onClick={onClose}>Cancel</button><button className="btn primary" onClick={()=>{onSave({...task,name,status,context,attachments,tags,due,start,estimate});onClose();}}>Save</button></div>
+        <div className="footer-right"><button className="btn" onClick={onClose}>Cancel</button><button className="btn primary" onClick={()=>{onSave({...task,name,status,context,attachments,tags,due,estimate,recurring,recurringFrequency});onClose();}}>Save</button></div>
       </div>
     </div>
   </div>);
@@ -623,9 +625,8 @@ function TaskItem({task,onToggle,onOpen,onDragStart,onDragOver,onDrop,isDragging
     <div className="task-body" onClick={()=>onOpen(task)} style={{cursor:'pointer'}}>
       <div className="task-name-row"><div className="task-name">{task.name}</div>{task.estimate&&<span className="estimate-tag">{task.estimate}</span>}{(task.tags||[]).map((t,i)=>{const n=tagName(t);const p=(projects||[]).find(pr=>pr.name===n);const c=p?p.color:'var(--text3)';return <span key={i} title={n} style={{display:'inline-block',width:'8px',height:'8px',borderRadius:'50%',background:c,flexShrink:0}}/>;})}</div>
       {task.status&&<div className="task-status">{task.status}</div>}
-      {(task.start||task.due)&&<div className="task-meta-row">
-        {task.start&&<span className="task-date-label">Start: {task.start}</span>}
-        {task.due&&<span className="task-date-label">Due: {task.due}</span>}
+      {task.due&&<div className="task-meta-row">
+        <span className="task-date-label">Due: {task.due}</span>
       </div>}
     </div>
     <div className="task-meta" onClick={()=>onOpen(task)} style={{cursor:'pointer'}}>{(task.attachments||[]).length>0&&<span className="attach-badge">📎{task.attachments.length}</span>}</div>
@@ -892,8 +893,7 @@ function ProjectCard({project,incomplete,complete,onArchive}){
             <div className="proj-task-name" style={{textDecoration:'line-through',color:'var(--text3)'}}>{t.name}</div>
             {t.status&&<div style={{fontSize:'10px',color:'var(--text3)',fontStyle:'italic',marginTop:'2px'}}>{t.status}</div>}
             {t.context&&<div style={{fontSize:'11px',color:'var(--text2)',marginTop:'4px',lineHeight:'1.5'}}>{t.context}</div>}
-            {(t.start||t.due||t.estimate)&&<div className="task-meta-row" style={{marginTop:'4px'}}>
-              {t.start&&<span className="task-date-label">Start: {t.start}</span>}
+            {(t.due||t.estimate)&&<div className="task-meta-row" style={{marginTop:'4px'}}>
               {t.due&&<span className="task-date-label">Due: {t.due}</span>}
               {t.estimate&&<span className="estimate-tag">{t.estimate}</span>}
             </div>}
@@ -922,6 +922,74 @@ function ProjectsView({projects,tasks,forward,onArchive}){
       const complete=tagged.filter(t=>t.complete);
       return <ProjectCard key={p.id} project={p} incomplete={incomplete} complete={complete} onArchive={()=>onArchive(p.id)}/>;
     })}
+  </div>);
+}
+
+function WeeklySummary({tasks,projects,onOpenTask}){
+  // Get Monday–Sunday of current week
+  const now=new Date();const dayOfWeek=now.getDay();const mondayOffset=dayOfWeek===0?-6:1-dayOfWeek;
+  const monday=new Date(now);monday.setDate(now.getDate()+mondayOffset);monday.setHours(0,0,0,0);
+  const sunday=new Date(monday);sunday.setDate(monday.getDate()+6);sunday.setHours(23,59,59,999);
+  const weekDays=Array.from({length:7},(_,i)=>{const d=new Date(monday);d.setDate(monday.getDate()+i);return d;});
+
+  // Gather all tasks from this week
+  const weekTasks=[];
+  weekDays.forEach(d=>{const k=dk(d);(tasks[k]||[]).forEach(t=>weekTasks.push({...t,dayKey:k,date:d}));});
+  const completed=weekTasks.filter(t=>t.complete);
+  const totalCreated=weekTasks.length;
+
+  // Per-project breakdown
+  const projBreakdown={};
+  completed.forEach(t=>{(t.tags||[]).map(tagName).forEach(pn=>{if(!projBreakdown[pn])projBreakdown[pn]=0;projBreakdown[pn]++;});});
+
+  // Group completed by day
+  const byDay={};
+  weekDays.forEach(d=>{const k=dk(d);byDay[k]={date:d,tasks:[]};});
+  completed.forEach(t=>{if(byDay[t.dayKey])byDay[t.dayKey].tasks.push(t);});
+
+  return(<div style={{display:'flex',flexDirection:'column',gap:'20px'}}>
+    <div style={{fontFamily:"'Fraunces',serif",fontWeight:700,fontSize:'24px',color:'var(--text)',letterSpacing:'-0.3px'}}>Weekly Summary</div>
+    <div style={{fontSize:'11px',color:'var(--text3)',fontStyle:'italic'}}>{MS[monday.getMonth()]} {monday.getDate()} – {MS[sunday.getMonth()]} {sunday.getDate()}</div>
+
+    <div style={{display:'flex',gap:'16px',flexWrap:'wrap'}}>
+      <div style={{background:'var(--surface)',border:'1.5px solid var(--border)',borderRadius:'14px',padding:'16px 20px',flex:'1',minWidth:'120px'}}>
+        <div style={{fontSize:'28px',fontFamily:"'Fraunces',serif",fontWeight:700,color:'var(--accent2)'}}>{completed.length}</div>
+        <div style={{fontSize:'10px',color:'var(--text3)',textTransform:'uppercase',letterSpacing:'1px',fontWeight:700}}>Completed</div>
+      </div>
+      <div style={{background:'var(--surface)',border:'1.5px solid var(--border)',borderRadius:'14px',padding:'16px 20px',flex:'1',minWidth:'120px'}}>
+        <div style={{fontSize:'28px',fontFamily:"'Fraunces',serif",fontWeight:700,color:'var(--text)'}}>{totalCreated}</div>
+        <div style={{fontSize:'10px',color:'var(--text3)',textTransform:'uppercase',letterSpacing:'1px',fontWeight:700}}>Total Created</div>
+      </div>
+    </div>
+
+    {Object.keys(projBreakdown).length>0&&<div style={{background:'var(--surface)',border:'1.5px solid var(--border)',borderRadius:'14px',padding:'16px 20px'}}>
+      <div style={{fontSize:'9px',textTransform:'uppercase',letterSpacing:'1.5px',color:'var(--text3)',fontWeight:700,marginBottom:'10px'}}>By Project</div>
+      <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
+        {Object.entries(projBreakdown).map(([pn,count])=>{const p=(projects||[]).find(pr=>pr.name===pn);const c=p?p.color:'var(--text3)';return(
+          <div key={pn} style={{display:'flex',alignItems:'center',gap:'8px'}}>
+            <span style={{display:'inline-block',width:'8px',height:'8px',borderRadius:'50%',background:c,flexShrink:0}}/>
+            <span style={{fontSize:'13px',fontWeight:600,color:'var(--text)',flex:1}}>{pn}</span>
+            <span style={{fontSize:'13px',fontWeight:700,color:c}}>{count}</span>
+          </div>
+        );})}
+      </div>
+    </div>}
+
+    {weekDays.map(d=>{const k=dk(d);const dayData=byDay[k];if(!dayData||dayData.tasks.length===0)return null;return(
+      <div key={k} style={{background:'var(--surface)',border:'1.5px solid var(--border)',borderRadius:'14px',padding:'16px 20px'}}>
+        <div style={{fontSize:'9px',textTransform:'uppercase',letterSpacing:'1.5px',color:'var(--text3)',fontWeight:700,marginBottom:'10px'}}>{DAYS[d.getDay()]} · {MS[d.getMonth()]} {d.getDate()}</div>
+        <div style={{display:'flex',flexDirection:'column',gap:'5px'}}>
+          {dayData.tasks.map(t=><div key={t.id} style={{display:'flex',alignItems:'center',gap:'8px',padding:'7px 10px',background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:'9px',cursor:'pointer',transition:'all .15s'}} onClick={()=>onOpenTask(t,k)}>
+            <span style={{width:'14px',height:'14px',borderRadius:'50%',background:'var(--accent2)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'8px',color:'#fff',fontWeight:700,flexShrink:0}}>✓</span>
+            <span style={{flex:1,fontSize:'12px',fontWeight:600,color:'var(--text)',textDecoration:'line-through',opacity:.7}}>{t.name}</span>
+            {t.estimate&&<span className="estimate-tag">{t.estimate}</span>}
+            {(t.tags||[]).map((tg,i)=>{const n=tagName(tg);const p=(projects||[]).find(pr=>pr.name===n);const c=p?p.color:'var(--text3)';return <span key={i} style={{display:'inline-block',width:'8px',height:'8px',borderRadius:'50%',background:c,flexShrink:0}}/>;
+            })}
+          </div>)}
+        </div>
+      </div>
+    );})}
+    {completed.length===0&&<div style={{fontSize:'13px',color:'var(--text3)',fontStyle:'italic',textAlign:'center',padding:'20px 0'}}>No completed tasks this week yet.</div>}
   </div>);
 }
 
@@ -1007,14 +1075,14 @@ function App(){
     saveTimer.current=setTimeout(async()=>{try{const ops=[];Object.entries(tasksObj).forEach(([dayKey,ts])=>{ts.forEach((t,i)=>ops.push(dbUpsertTask(t,dayKey,i)));});fwdArr.forEach((t,i)=>ops.push(dbUpsertForward(t,i)));await Promise.all(ops);setSyncStatus('ok');}catch(e){console.error(e);setSyncStatus('error');}},800);
   };
 
-  const addTask=(k,n)=>{const task={id:uid(),name:n,status:'',context:'',complete:false,attachments:[],tags:[],due:'',start:'',estimate:''};setTasks(prev=>{const next={...prev,[k]:[...(prev[k]||[]),task]};scheduleSave(next,forward);return next;});};
+  const addTask=(k,n)=>{const task={id:uid(),name:n,status:'',context:'',complete:false,attachments:[],tags:[],due:'',estimate:'',recurring:false,recurringFrequency:''};setTasks(prev=>{const next={...prev,[k]:[...(prev[k]||[]),task]};scheduleSave(next,forward);return next;});};
   const toggleTask=(k,id)=>setTasks(p=>{const next={...p,[k]:(p[k]||[]).map(t=>t.id===id?{...t,complete:!t.complete}:t)};scheduleSave(next,forward);return next;});
   const saveTask=(k,u)=>setTasks(p=>{const next={...p,[k]:(p[k]||[]).map(t=>t.id===u.id?u:t)};scheduleSave(next,forward);return next;});
   const updTasks=(k,a)=>setTasks(p=>{const next={...p,[k]:a};scheduleSave(next,forward);return next;});
   const delTask=(k,id)=>{dbDeleteTask(id);setTasks(p=>{const next={...p,[k]:(p[k]||[]).filter(t=>t.id!==id)};scheduleSave(next,forward);return next;});setEditing(null);};
   const movTask=(f,t,id)=>setTasks(p=>{const task=(p[f]||[]).find(x=>x.id===id);if(!task)return p;const next={...p,[f]:(p[f]||[]).filter(x=>x.id!==id),[t]:[...(p[t]||[]),task]};scheduleSave(next,forward);return next;});
   const moveToFwd=(fd,id)=>{const task=(tasks[fd]||[]).find(t=>t.id===id);if(!task)return;setTasks(prev=>{const next={...prev,[fd]:(prev[fd]||[]).filter(t=>t.id!==id)};const nf=[...forward,task];scheduleSave(next,nf);setForward(nf);return next;});};
-  const addFwd=n=>{const task={id:uid(),name:n,status:'',context:'',complete:false,attachments:[],tags:[],due:'',start:'',estimate:''};setForward(prev=>{const next=[...prev,task];scheduleSave(tasks,next);return next;});};
+  const addFwd=n=>{const task={id:uid(),name:n,status:'',context:'',complete:false,attachments:[],tags:[],due:'',estimate:'',recurring:false,recurringFrequency:''};setForward(prev=>{const next=[...prev,task];scheduleSave(tasks,next);return next;});};
   const remFwd=id=>{dbDeleteForward(id);setForward(p=>{const next=p.filter(t=>t.id!==id);scheduleSave(tasks,next);return next;});};
   const saveFwd=u=>setForward(p=>{const next=p.map(t=>t.id===u.id?u:t);scheduleSave(tasks,next);return next;});
   const delFwd=id=>{dbDeleteForward(id);setForward(p=>{const next=p.filter(t=>t.id!==id);scheduleSave(tasks,next);return next;});setEditFwd(null);};
@@ -1170,6 +1238,10 @@ function App(){
       <div className={'s-reading-link'+(mobTab==='projects'?' active':'')} onClick={()=>setMobTab('projects')}>
         <span>📂</span><span className="s-reading-link-label">Projects</span>
       </div>
+      <div className="sidebar-section" style={{color:'var(--accent2)'}}>Summary</div>
+      <div className={'s-reading-link'+(mobTab==='summary'?' active':'')} onClick={()=>setMobTab('summary')}>
+        <span>📊</span><span className="s-reading-link-label">Weekly Summary</span>
+      </div>
       {forward.length>0&&<><div className="sidebar-section" style={{color:'var(--purple)'}}>Looking Forward</div><div className="s-day" style={{cursor:'default'}}><div className="s-day-count" style={{color:'var(--purple)',fontSize:'10px'}}>{forward.length} task{forward.length!==1?'s':''} parked</div></div></>}
     </div>
 
@@ -1184,6 +1256,7 @@ function App(){
       {mobTab==='days'&&<><div className="sidebar-section" style={{fontSize:'11px',paddingLeft:0}}>This Week</div><div style={{display:'flex',flexDirection:'column',gap:'8px'}}>{sidebarDays}</div></>}
       {mobTab==='forward'&&<LookingForward items={forward} onDrop={moveToFwd} onRemove={remFwd} onOpen={t=>setEditFwd(t)} onAdd={addFwd} onToggle={toggleFwd}/>}
       {mobTab==='projects'&&<ProjectsView projects={projects} tasks={tasks} forward={forward} onArchive={archiveProject}/>}
+      {mobTab==='summary'&&<WeeklySummary tasks={tasks} projects={projects} onOpenTask={(t,k)=>setEditing({task:t,dayKey:k})}/>}
       {mobTab==='reading'&&(!showAllCompleted
         ?<MediaPage items={mediaItems} onAdd={()=>setAddMediaModal(true)} onEdit={setEditMedia} onRemove={removeMedia} onToggleComplete={toggleMediaComplete} onUpdateQuotes={updateMediaQuotes} onViewAll={()=>setShowAllCompleted(true)}/>
         :<AllCompletedPage items={mediaItems.filter(m=>m.status==='completed')} onBack={()=>setShowAllCompleted(false)}/>
@@ -1195,6 +1268,7 @@ function App(){
       <button className={'mob-btn'+(mobTab==='days'?' active':'')} onClick={()=>setMobTab('days')}><span className="mob-icon">📅</span>Days</button>
       <button className={'mob-btn'+(mobTab==='forward'?' active':'')} onClick={()=>setMobTab('forward')}><span className="mob-icon">🔭</span>Forward</button>
       <button className={'mob-btn'+(mobTab==='projects'?' active':'')} onClick={()=>setMobTab('projects')}><span className="mob-icon">📂</span>Projects</button>
+      <button className={'mob-btn'+(mobTab==='summary'?' active':'')} onClick={()=>setMobTab('summary')}><span className="mob-icon">📊</span>Summary</button>
     </nav>
 
     {editing&&<TaskModal task={editing.task} onClose={()=>setEditing(null)} onSave={u=>{saveTask(editing.dayKey,u);setEditing(null);}} onDelete={()=>delTask(editing.dayKey,editing.task.id)} projects={projects} onCreateProject={createProject}/>}

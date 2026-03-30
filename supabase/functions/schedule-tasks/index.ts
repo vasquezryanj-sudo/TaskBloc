@@ -109,6 +109,21 @@ function timeToMins(est: string): number {
 
 // ── Main handler ──
 
+function yesterdayKey(tz: string): string {
+  const now = new Date();
+  now.setDate(now.getDate() - 1);
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+  }).formatToParts(now);
+  const y = parts.find((p) => p.type === "year")!.value;
+  const m = String(Number(parts.find((p) => p.type === "month")!.value) - 1);
+  const d = parts.find((p) => p.type === "day")!.value;
+  return `${y}-${m}-${d}`;
+}
+
 Deno.serve(async () => {
   try {
     const tz = "America/New_York"; // user's local timezone
@@ -116,6 +131,48 @@ Deno.serve(async () => {
     const dateStr = todayISO(tz);
     const DAY_START = 9 * 60; // 9am
     const DAY_END = 19 * 60; // 7pm
+
+    // ── Recurring task rollover ──
+    const yKey = yesterdayKey(tz);
+    const { data: recurringTasks } = await sb
+      .from("tasks")
+      .select("*")
+      .eq("day_key", yKey)
+      .eq("complete", true)
+      .eq("recurring", true);
+
+    const recurringCreated: string[] = [];
+    if (recurringTasks && recurringTasks.length > 0) {
+      // Get count of existing tasks for today to set position
+      const { data: existingToday } = await sb.from("tasks").select("id").eq("day_key", dayKey);
+      let pos = existingToday ? existingToday.length : 0;
+      for (const rt of recurringTasks) {
+        const newTask = {
+          id: crypto.randomUUID(),
+          day_key: dayKey,
+          name: rt.name,
+          status: "",
+          context: rt.context || "",
+          complete: false,
+          attachments: rt.attachments || [],
+          tags: rt.tags || [],
+          due: rt.due || "",
+          estimate: rt.estimate || "",
+          recurring: true,
+          recurring_frequency: rt.recurring_frequency || "",
+          position: pos++,
+        };
+        await sb.from("tasks").insert(newTask);
+        recurringCreated.push(rt.name);
+      }
+    }
+
+    // ── Monday weekly reset ──
+    const nowLocal = new Date().toLocaleString("en-US", { timeZone: tz });
+    const localDate = new Date(nowLocal);
+    if (localDate.getDay() === 1) {
+      await sb.from("settings").upsert({ key: "week_cleared", value: new Date().toISOString() });
+    }
 
     // 1. Fetch today's incomplete tasks
     const { data: tasks, error: taskErr } = await sb
@@ -191,7 +248,6 @@ Deno.serve(async () => {
 
       const descLines: string[] = [];
       if (task.status) descLines.push(`Status: ${task.status}`);
-      if (task.start) descLines.push(`Start: ${task.start}`);
       if (task.due) descLines.push(`Due: ${task.due}`);
       if (task.estimate) descLines.push(`Estimate: ${task.estimate}`);
       if (task.tags && task.tags.length > 0) descLines.push(`Tags: ${task.tags.join(", ")}`);
@@ -228,7 +284,7 @@ Deno.serve(async () => {
     }
 
     return new Response(
-      JSON.stringify({ scheduled: created.length, tasks: created }),
+      JSON.stringify({ scheduled: created.length, tasks: created, recurringCreated: recurringCreated.length, recurringTasks: recurringCreated }),
       { status: 200, headers: { "Content-Type": "application/json" } }
     );
   } catch (err) {
