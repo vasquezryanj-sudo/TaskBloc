@@ -1238,7 +1238,7 @@ function App(){
 
   return(<div className="app">
     <div className="sidebar">
-      <div className="sidebar-logo">TaskBloc</div>
+      <div className="sidebar-logo" style={{cursor:'pointer'}} onClick={()=>{setSel(0);setMobTab('today');}}>TaskBloc</div>
       <div className="sidebar-sub">your days, organized</div>
       <SyncStatus status={syncStatus} onSync={fullSync}/>
       <div className="sidebar-section">This Week</div>
@@ -1249,9 +1249,6 @@ function App(){
       </div>
       <div className={'s-reading-link'+(mobTab==='summary'?' active':'')} onClick={()=>setMobTab('summary')}>
         <span>📊</span><span className="s-reading-link-label">Weekly Summary</span>
-      </div>
-      <div className={'s-reading-link'+(mobTab==='forward'?' active':'')} onClick={()=>setMobTab('forward')}>
-        <span>🔭</span><span className="s-reading-link-label">Looking Forward</span>
       </div>
     </div>
 
@@ -1276,7 +1273,6 @@ function App(){
     <nav className="mob-nav">
       <button className={'mob-btn'+(mobTab==='today'?' active':'')} onClick={()=>setMobTab('today')}><span className="mob-icon">📋</span>Today</button>
       <button className={'mob-btn'+(mobTab==='days'?' active':'')} onClick={()=>setMobTab('days')}><span className="mob-icon">📅</span>Days</button>
-      <button className={'mob-btn'+(mobTab==='forward'?' active':'')} onClick={()=>setMobTab('forward')}><span className="mob-icon">🔭</span>Forward</button>
       <button className={'mob-btn'+(mobTab==='projects'?' active':'')} onClick={()=>setMobTab('projects')}><span className="mob-icon">📂</span>Projects</button>
       <button className={'mob-btn'+(mobTab==='summary'?' active':'')} onClick={()=>setMobTab('summary')}><span className="mob-icon">📊</span>Summary</button>
     </nav>
