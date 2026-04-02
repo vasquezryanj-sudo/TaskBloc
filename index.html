@@ -665,17 +665,23 @@ function DayBlock({date,tasks,isToday,onAdd,onToggle,onOpen,onUpdateTasks,onMove
 function LookingForward({items,onDrop,onRemove,onOpen,onAdd,onToggle}){
   const [active,setActive]=useState(false);
   const [newName,setNewName]=useState('');
+  const [collapsed,setCollapsed]=useState(false);
   const hDrop=e=>{e.preventDefault();const tid=e.dataTransfer.getData('taskId'),fd=e.dataTransfer.getData('fromDay');if(tid&&fd)onDrop(fd,tid);setActive(false);};
   const add=()=>{if(!newName.trim())return;onAdd(newName.trim());setNewName('');};
   return(<div className={'lf-block'+(active?' drop-active':'')} onDragOver={e=>{e.preventDefault();setActive(true);}} onDragLeave={()=>setActive(false)} onDrop={hDrop}>
-    <div className="lf-title">Looking Forward</div>
-    <div className="lf-sub">Tasks beyond this week.</div>
+    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+      <div className="lf-title" style={{marginBottom:0}}>Looking Forward</div>
+      <button onClick={()=>setCollapsed(c=>!c)} style={{background:'none',border:'none',cursor:'pointer',fontSize:'16px',color:'var(--text3)',padding:'4px 6px',borderRadius:'6px',transition:'all .15s',lineHeight:1}} title={collapsed?'Expand':'Collapse'}>{collapsed?'▶':'▼'}</button>
+    </div>
+    {!collapsed&&<div className="lf-sub">Tasks beyond this week.</div>}
+    {!collapsed&&<>
     <div className="lf-add-row">
       <input className="lf-add-input" placeholder="Add a future task…" value={newName} onChange={e=>setNewName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&add()}/>
       <button className="btn sm purple" onClick={add}>Add</button>
     </div>
     {items.length>0&&<div className="lf-list">{items.map(t=>(<div key={t.id} className="lf-item" draggable onDragStart={e=>{e.dataTransfer.setData('taskId',t.id);e.dataTransfer.setData('fromDay','forward');}} onClick={()=>onOpen(t)} style={{cursor:'pointer'}}><div className="task-check-zone" onClick={e=>{e.stopPropagation();onToggle(t.id);}}><div className={'task-check'+(t.complete?' on':'')}/></div><span className="lf-name" style={t.complete?{textDecoration:'line-through',color:'var(--text3)'}:{}}>{t.name}</span>{t.status&&<span style={{fontSize:'10px',color:'var(--purple)',fontStyle:'italic',flexShrink:0}}>{t.status}</span>}{(t.attachments||[]).length>0&&<span style={{fontSize:'10px',color:'var(--text3)',flexShrink:0}}>📎{t.attachments.length}</span>}<button className="lf-remove" onClick={e=>{e.stopPropagation();onRemove(t.id);}}>✕</button></div>))}</div>}
     <div className="lf-drop-hint">{items.length===0?'Drop tasks here to save for later':'Drop more tasks here'}</div>
+    </>}
   </div>);
 }
 
@@ -867,7 +873,7 @@ function MediaPage({items,onAdd,onEdit,onRemove,onToggleComplete,onUpdateQuotes,
   </div>);
 }
 
-function ProjectCard({project,incomplete,complete,onArchive}){
+function ProjectCard({project,incomplete,complete,onArchive,onOpen}){
   const [showDone,setShowDone]=useState(false);
   return(<div className="proj-card" style={{borderLeftColor:project.color}}>
     <div className="proj-card-header">
@@ -877,7 +883,7 @@ function ProjectCard({project,incomplete,complete,onArchive}){
     </div>
     {incomplete.length===0&&complete.length===0&&<div style={{fontSize:'12px',color:'var(--text3)',fontStyle:'italic',padding:'4px 0'}}>No tasks tagged with this project.</div>}
     {incomplete.length>0&&<div className="proj-task-list">
-      {incomplete.map(t=><div key={t.id+t.dayKey} className="proj-task-item">
+      {incomplete.map(t=><div key={t.id+t.dayKey} className="proj-task-item" style={{cursor:'pointer'}} onClick={()=>onOpen&&onOpen(t)}>
         <span className="proj-task-dot" style={{background:project.color}}/>
         <span className="proj-task-name">{t.name}</span>
         {t.due&&<span className="task-date-label">Due: {t.due}</span>}
@@ -887,7 +893,7 @@ function ProjectCard({project,incomplete,complete,onArchive}){
     {complete.length>0&&<>
       <button className="proj-done-toggle" onClick={()=>setShowDone(s=>!s)}>Completed ({complete.length}) {showDone?'▲':'▼'}</button>
       {showDone&&<div className="proj-task-list">
-        {complete.map(t=><div key={t.id+t.dayKey} className="proj-task-item done">
+        {complete.map(t=><div key={t.id+t.dayKey} className="proj-task-item done" style={{cursor:'pointer'}} onClick={()=>onOpen&&onOpen(t)}>
           <span className="proj-task-check">✓</span>
           <div style={{flex:1,minWidth:0}}>
             <div className="proj-task-name" style={{textDecoration:'line-through',color:'var(--text3)'}}>{t.name}</div>
@@ -908,7 +914,7 @@ function ProjectCard({project,incomplete,complete,onArchive}){
   </div>);
 }
 
-function ProjectsView({projects,tasks,forward,onArchive}){
+function ProjectsView({projects,tasks,forward,onArchive,onOpen}){
   const active=projects.filter(p=>!p.archived);
   const allTasks=[];
   Object.entries(tasks).forEach(([dayKey,ts])=>{ts.forEach(t=>allTasks.push({...t,dayKey}));});
@@ -920,7 +926,7 @@ function ProjectsView({projects,tasks,forward,onArchive}){
       const tagged=allTasks.filter(t=>(t.tags||[]).map(tagName).includes(p.name));
       const incomplete=tagged.filter(t=>!t.complete);
       const complete=tagged.filter(t=>t.complete);
-      return <ProjectCard key={p.id} project={p} incomplete={incomplete} complete={complete} onArchive={()=>onArchive(p.id)}/>;
+      return <ProjectCard key={p.id} project={p} incomplete={incomplete} complete={complete} onArchive={()=>onArchive(p.id)} onOpen={onOpen}/>;
     })}
   </div>);
 }
@@ -1260,9 +1266,8 @@ function App(){
         {weekStrip}
         <LookingForward items={forward} onDrop={moveToFwd} onRemove={remFwd} onOpen={t=>setEditFwd(t)} onAdd={addFwd} onToggle={toggleFwd}/>
       </>}
-      {mobTab==='days'&&<><div className="sidebar-section" style={{fontSize:'11px',paddingLeft:0}}>This Week</div><div style={{display:'flex',flexDirection:'column',gap:'8px'}}>{sidebarDays}</div></>}
       {mobTab==='forward'&&<LookingForward items={forward} onDrop={moveToFwd} onRemove={remFwd} onOpen={t=>setEditFwd(t)} onAdd={addFwd} onToggle={toggleFwd}/>}
-      {mobTab==='projects'&&<ProjectsView projects={projects} tasks={tasks} forward={forward} onArchive={archiveProject}/>}
+      {mobTab==='projects'&&<ProjectsView projects={projects} tasks={tasks} forward={forward} onArchive={archiveProject} onOpen={t=>{if(t.dayKey==='forward')setEditFwd(t);else setEditing({task:t,dayKey:t.dayKey});}}/>}
       {mobTab==='summary'&&<WeeklySummary tasks={tasks} projects={projects} onOpenTask={(t,k)=>setEditing({task:t,dayKey:k})}/>}
       {mobTab==='reading'&&(!showAllCompleted
         ?<MediaPage items={mediaItems} onAdd={()=>setAddMediaModal(true)} onEdit={setEditMedia} onRemove={removeMedia} onToggleComplete={toggleMediaComplete} onUpdateQuotes={updateMediaQuotes} onViewAll={()=>setShowAllCompleted(true)}/>
@@ -1272,7 +1277,6 @@ function App(){
 
     <nav className="mob-nav">
       <button className={'mob-btn'+(mobTab==='today'?' active':'')} onClick={()=>setMobTab('today')}><span className="mob-icon">📋</span>Today</button>
-      <button className={'mob-btn'+(mobTab==='days'?' active':'')} onClick={()=>setMobTab('days')}><span className="mob-icon">📅</span>Days</button>
       <button className={'mob-btn'+(mobTab==='projects'?' active':'')} onClick={()=>setMobTab('projects')}><span className="mob-icon">📂</span>Projects</button>
       <button className={'mob-btn'+(mobTab==='summary'?' active':'')} onClick={()=>setMobTab('summary')}><span className="mob-icon">📊</span>Summary</button>
     </nav>
