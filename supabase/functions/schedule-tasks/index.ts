@@ -129,7 +129,7 @@ Deno.serve(async () => {
     const tz = "America/New_York"; // user's local timezone
     const dayKey = todayKey(tz);
     const dateStr = todayISO(tz);
-    const DAY_START = 9 * 60; // 9am
+    const DAY_START = 10 * 60; // 10am
     const DAY_END = 19 * 60; // 7pm
 
     // ── Recurring task rollover ──
@@ -190,8 +190,8 @@ Deno.serve(async () => {
     // 2. Get Google access token
     const accessToken = await getAccessToken();
 
-    // 3. Fetch today's calendar events (9am–7pm)
-    const timeMin = `${dateStr}T09:00:00`;
+    // 3. Fetch today's calendar events (10am–7pm)
+    const timeMin = `${dateStr}T10:00:00`;
     const timeMax = `${dateStr}T19:00:00`;
     const calParams = new URLSearchParams({
       timeMin: new Date(`${timeMin}`).toISOString(),
