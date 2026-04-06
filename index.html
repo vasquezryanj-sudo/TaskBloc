@@ -1101,7 +1101,7 @@ function App(){
   const remFwd=id=>{dbDeleteForward(id);setForward(p=>{const next=p.filter(t=>t.id!==id);scheduleSave(tasks,next);return next;});};
   const saveFwd=u=>setForward(p=>{const next=p.map(t=>t.id===u.id?u:t);scheduleSave(tasks,next);return next;});
   const delFwd=id=>{dbDeleteForward(id);setForward(p=>{const next=p.filter(t=>t.id!==id);scheduleSave(tasks,next);return next;});setEditFwd(null);};
-  const toggleFwd=id=>setForward(p=>{const next=p.map(t=>t.id===id?{...t,complete:!t.complete}:t);scheduleSave(tasks,next);return next;});
+  const toggleFwd=id=>{const task=forward.find(t=>t.id===id);if(!task)return;if(!task.complete){const completed={...task,complete:true};const todayKey=dk(new Date());dbDeleteForward(id);setForward(p=>{const next=p.filter(t=>t.id!==id);setTasks(prevT=>{const nextT={...prevT,[todayKey]:[...(prevT[todayKey]||[]),completed]};scheduleSave(nextT,next);return nextT;});return next;});}else{setForward(p=>{const next=p.map(t=>t.id===id?{...t,complete:false}:t);scheduleSave(tasks,next);return next;});}};
   const moveFwdToDay=(id,dayKey)=>{const task=forward.find(t=>t.id===id);if(!task)return;dbDeleteForward(id);setForward(prev=>{const next=prev.filter(t=>t.id!==id);setTasks(prevT=>{const nextT={...prevT,[dayKey]:[...(prevT[dayKey]||[]),task]};scheduleSave(nextT,next);return nextT;});return next;});};
 
   const addMedia=item=>{const next=[...mediaItems,item];setMediaItems(next);mediaSave(next);};
