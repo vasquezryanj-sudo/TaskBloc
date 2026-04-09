@@ -168,9 +168,18 @@ Deno.serve(async () => {
     }
 
     // ── Monday weekly reset ──
+    // Only delete completed daily tasks from `tasks` table.
+    // NEVER touch forward_tasks or next_week tables.
     const nowLocal = new Date().toLocaleString("en-US", { timeZone: tz });
     const localDate = new Date(nowLocal);
     if (localDate.getDay() === 1) {
+      const { data: cleared, error: clearErr } = await sb
+        .from("tasks")
+        .delete()
+        .eq("complete", true)
+        .select("id");
+      console.log(`[Monday reset] Deleted ${cleared?.length ?? 0} completed daily tasks`);
+      if (clearErr) console.error("[Monday reset] Error:", clearErr);
       await sb.from("settings").upsert({ key: "week_cleared", value: new Date().toISOString() });
     }
 
@@ -183,8 +192,9 @@ Deno.serve(async () => {
       .order("position", { ascending: true });
 
     if (taskErr) throw taskErr;
+    console.log(`[debug] day_key="${dayKey}", tasks found=${tasks?.length ?? 0}`);
     if (!tasks || tasks.length === 0) {
-      return new Response(JSON.stringify({ message: "No tasks for today" }), { status: 200 });
+      return new Response(JSON.stringify({ message: "No tasks for today", day_key: dayKey }), { status: 200 });
     }
 
     // 2. Get Google access token
