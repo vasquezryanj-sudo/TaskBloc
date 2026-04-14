@@ -363,40 +363,6 @@ body{background-image:radial-gradient(ellipse at 15% 80%,rgba(192,72,32,0.04) 0%
 .proj-chip{display:inline-flex;align-items:center;gap:3px;border-radius:8px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;transition:all .15s;border:1.5px solid;user-select:none;}
 .proj-chip:hover{transform:translateY(-1px);box-shadow:0 2px 6px var(--shadow);}
 
-/* ROLLOVER REVIEW */
-.rollover-overlay{position:fixed;inset:0;background:rgba(30,20,10,.6);display:flex;align-items:center;justify-content:center;z-index:300;backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2);padding:16px;animation:overlayIn .25s cubic-bezier(.4,0,.2,1) both;}
-.rollover-panel{background:var(--surface);border:1px solid var(--border);border-radius:22px;width:100%;max-width:800px;max-height:90dvh;overflow:hidden;display:flex;flex-direction:column;animation:mIn .3s cubic-bezier(.34,1.56,.64,1) both;box-shadow:0 8px 32px var(--shadow3),0 0 0 1px rgba(255,253,247,.5) inset;}
-.rollover-header{padding:24px 28px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;}
-.rollover-title{font-family:'Fraunces',serif;font-weight:700;font-size:22px;color:var(--text);letter-spacing:-0.3px;}
-.rollover-body{display:flex;flex:1;overflow:hidden;min-height:0;}
-.rollover-left{flex:1;padding:20px;overflow-y:auto;border-right:1px solid var(--border);display:flex;flex-direction:column;gap:6px;}
-.rollover-left-label{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:var(--text3);font-weight:700;margin-bottom:6px;}
-.rollover-right{width:260px;padding:20px;overflow-y:auto;display:flex;flex-direction:column;gap:10px;}
-.rollover-right-label{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:var(--text3);font-weight:700;margin-bottom:2px;}
-.rollover-task{background:var(--surface2);border:1.5px solid var(--border);border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:8px;cursor:grab;transition:all .2s cubic-bezier(.4,0,.2,1);user-select:none;}
-.rollover-task:hover{border-color:var(--border2);background:var(--surface);box-shadow:0 2px 8px var(--shadow2);transform:translateY(-1px);}
-.rollover-task.dragging{opacity:.35;cursor:grabbing;}
-.rollover-task-name{flex:1;font-size:13px;font-weight:600;color:var(--text);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.rollover-task-day{font-size:9px;color:var(--text3);background:var(--surface3);border-radius:5px;padding:1px 6px;font-weight:600;flex-shrink:0;}
-.rollover-discard{background:none;border:1px solid #f0b8b8;border-radius:6px;color:#c0392b;cursor:pointer;font-size:10px;padding:3px 8px;font-weight:600;flex-shrink:0;transition:all .15s;}
-.rollover-discard:hover{background:#fde8e8;}
-.rollover-bubble{background:var(--surface2);border:2px dashed var(--border);border-radius:14px;padding:14px 16px;text-align:center;transition:all .2s cubic-bezier(.4,0,.2,1);cursor:default;}
-.rollover-bubble:hover{border-color:var(--border2);}
-.rollover-bubble.drop-hover{border-color:var(--accent);border-style:solid;background:var(--accent-light);transform:scale(1.03);}
-.rollover-bubble.fwd{border-color:var(--purple);} .rollover-bubble.fwd.drop-hover{border-color:var(--purple);background:var(--purple-light);}
-.rollover-bubble-day{font-weight:700;font-size:13px;color:var(--text);}
-.rollover-bubble-date{font-size:10px;color:var(--text3);margin-top:2px;}
-.rollover-bubble-count{font-size:10px;color:var(--accent2);font-weight:600;margin-top:4px;}
-.rollover-empty{font-size:13px;color:var(--text3);font-style:italic;padding:20px 0;text-align:center;}
-@media(max-width:680px){
-  .rollover-panel{max-width:100%;border-radius:20px 20px 0 0;max-height:95dvh;}
-  .rollover-body{flex-direction:column;}
-  .rollover-left{border-right:none;border-bottom:1px solid var(--border);max-height:50%;flex:none;}
-  .rollover-right{width:100%;flex:1;flex-direction:row;flex-wrap:wrap;gap:8px;align-content:flex-start;}
-  .rollover-right-label{width:100%;}
-  .rollover-bubble{flex:1;min-width:calc(50% - 4px);}
-}
-
 /* ANIMATIONS */
 @keyframes fadeUp{from{opacity:0;transform:translateY(16px);}to{opacity:1;transform:translateY(0);}}
 
@@ -1008,62 +974,6 @@ function WeeklySummary({tasks,projects,onOpenTask}){
   </div>);
 }
 
-function RolloverReview({staleTasks,onMoveTo,onMoveToForward,onDiscard,onClose}){
-  const next5=Array.from({length:5},(_,i)=>{const d=new Date();d.setDate(d.getDate()+i+1);return d;});
-  const [draggingId,setDraggingId]=useState(null);
-  const [hoverTarget,setHoverTarget]=useState(null);
-  const [remaining,setRemaining]=useState(staleTasks.map(t=>t.id));
-  const visible=staleTasks.filter(t=>remaining.includes(t.id));
-  const handleDrop=(destKey)=>{
-    if(!draggingId)return;
-    if(destKey==='forward')onMoveToForward(draggingId);
-    else onMoveTo(draggingId,destKey);
-    setRemaining(prev=>prev.filter(id=>id!==draggingId));
-    setDraggingId(null);setHoverTarget(null);
-  };
-  const discard=(id)=>{onDiscard(id);setRemaining(prev=>prev.filter(x=>x!==id));};
-  return(<div className="rollover-overlay">
-    <div className="rollover-panel">
-      <div className="rollover-header">
-        <div className="rollover-title">End of Day Review</div>
-        <button className="btn primary" onClick={onClose}>Done</button>
-      </div>
-      <div className="rollover-body">
-        <div className="rollover-left">
-          <div className="rollover-left-label">Incomplete Tasks</div>
-          {visible.length===0&&<div className="rollover-empty">All tasks handled!</div>}
-          {visible.map(t=><div key={t.id} className={'rollover-task'+(draggingId===t.id?' dragging':'')} draggable
-            onDragStart={e=>{setDraggingId(t.id);e.dataTransfer.setData('text/plain',t.id);}}
-            onDragEnd={()=>{setDraggingId(null);setHoverTarget(null);}}>
-            <span className="rollover-task-name">{t.name}</span>
-            {t.sourceDayLabel&&<span className="rollover-task-day">{t.sourceDayLabel}</span>}
-            <button className="rollover-discard" onClick={()=>discard(t.id)}>Discard</button>
-          </div>)}
-        </div>
-        <div className="rollover-right">
-          <div className="rollover-right-label">Move To</div>
-          {next5.map(d=>{const k=dk(d);return(
-            <div key={k} className={'rollover-bubble'+(hoverTarget===k?' drop-hover':'')}
-              onDragOver={e=>{e.preventDefault();setHoverTarget(k);}}
-              onDragLeave={()=>setHoverTarget(null)}
-              onDrop={e=>{e.preventDefault();handleDrop(k);}}>
-              <div className="rollover-bubble-day">{DAYS[d.getDay()]}</div>
-              <div className="rollover-bubble-date">{MS[d.getMonth()]} {d.getDate()}</div>
-            </div>
-          );})}
-          <div className={'rollover-bubble fwd'+(hoverTarget==='forward'?' drop-hover':'')}
-            onDragOver={e=>{e.preventDefault();setHoverTarget('forward');}}
-            onDragLeave={()=>setHoverTarget(null)}
-            onDrop={e=>{e.preventDefault();handleDrop('forward');}}>
-            <div className="rollover-bubble-day" style={{color:'var(--purple)'}}>Looking Forward</div>
-            <div className="rollover-bubble-date">Save for later</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>);
-}
-
 function App(){
   const days=next8();
   const [tasks,setTasks]=useState({});
@@ -1112,78 +1022,6 @@ function App(){
 
   const createProject=p=>{setProjects(prev=>[...prev,p]);dbUpsertProject(p).catch(console.error);};
   const archiveProject=id=>{setProjects(prev=>prev.map(p=>p.id===id?{...p,archived:true}:p));const proj=projects.find(p=>p.id===id);if(proj)dbUpsertProject({...proj,archived:true}).catch(console.error);};
-
-  /* ── nightly rollover review ── */
-  const [showRollover,setShowRollover]=useState(false);
-  const rolloverChecked=useRef(false);
-  const ROLLOVER_KEY='taskbloc_lastRollover';
-  const getRolloverDate=()=>localStorage.getItem(ROLLOVER_KEY)||'';
-  const setRolloverDate=()=>localStorage.setItem(ROLLOVER_KEY,new Date().toDateString());
-
-  const getPastIncompleteTasks=()=>{
-    const todayKey=dk(new Date());
-    const stale=[];
-    Object.entries(tasks).forEach(([dayKey,ts])=>{
-      if(dayKey>=todayKey)return;
-      ts.filter(t=>!t.complete).forEach(t=>{
-        const parts=dayKey.split('-');const d=new Date(+parts[0],+parts[1],+parts[2]);
-        stale.push({...t,sourceDayKey:dayKey,sourceDayLabel:DAYS[d.getDay()]+' '+MS[d.getMonth()]+' '+d.getDate()});
-      });
-    });
-    return stale;
-  };
-
-  useEffect(()=>{
-    if(rolloverChecked.current||syncStatus!=='ok')return;
-    rolloverChecked.current=true;
-    const today=new Date().toDateString();
-    if(getRolloverDate()===today)return;
-    const stale=getPastIncompleteTasks();
-    if(stale.length>0){setShowRollover(true);return;}
-  },[syncStatus,tasks]);
-
-  // 9pm timer trigger — re-check for past incomplete tasks at 9pm
-  useEffect(()=>{
-    const now=new Date();const nine=new Date();nine.setHours(21,0,0,0);
-    if(now>=nine)return;
-    const ms=nine-now;
-    const timer=setTimeout(()=>{
-      if(getRolloverDate()===new Date().toDateString())return;
-      const stale=getPastIncompleteTasks();
-      if(stale.length>0)setShowRollover(true);
-    },ms);
-    return()=>clearTimeout(timer);
-  },[]);
-
-  const rolloverMoveTo=(taskId,destDayKey)=>{
-    const todayKey=dk(new Date());
-    Object.entries(tasks).forEach(([dayKey,ts])=>{
-      const task=ts.find(t=>t.id===taskId);
-      if(!task)return;
-      setTasks(prev=>{
-        const next={...prev,[dayKey]:(prev[dayKey]||[]).filter(t=>t.id!==taskId),[destDayKey]:[...(prev[destDayKey]||[]),task]};
-        scheduleSave(next,forward);return next;
-      });
-    });
-  };
-  const rolloverMoveToForward=(taskId)=>{
-    Object.entries(tasks).forEach(([dayKey,ts])=>{
-      const task=ts.find(t=>t.id===taskId);
-      if(!task)return;
-      setTasks(prev=>{
-        const next={...prev,[dayKey]:(prev[dayKey]||[]).filter(t=>t.id!==taskId)};
-        const nf=[...forward,task];setForward(nf);scheduleSave(next,nf);return next;
-      });
-    });
-  };
-  const rolloverDiscard=(taskId)=>{
-    Object.entries(tasks).forEach(([dayKey,ts])=>{
-      if(!ts.find(t=>t.id===taskId))return;
-      dbDeleteTask(taskId);
-      setTasks(prev=>{const next={...prev,[dayKey]:(prev[dayKey]||[]).filter(t=>t.id!==taskId)};scheduleSave(next,forward);return next;});
-    });
-  };
-  const closeRollover=()=>{setRolloverDate();setShowRollover(false);};
 
   /* ── pull-to-refresh (mobile) ── */
   const [pullY,setPullY]=useState(0);
@@ -1284,7 +1122,6 @@ function App(){
     {editing&&<TaskModal task={editing.task} onClose={()=>setEditing(null)} onSave={u=>{saveTask(editing.dayKey,u);setEditing(null);}} onDelete={()=>delTask(editing.dayKey,editing.task.id)} projects={projects} onCreateProject={createProject}/>}
     {editFwd&&<TaskModal task={editFwd} onClose={()=>setEditFwd(null)} onSave={u=>{saveFwd(u);setEditFwd(null);}} onDelete={()=>delFwd(editFwd.id)} projects={projects} onCreateProject={createProject}/>}
     {(addMediaModal||editMedia)&&<MediaEntryModal entry={editMedia||{}} onClose={()=>{setAddMediaModal(false);setEditMedia(null);}} onSave={item=>{editMedia?updateMedia(item):addMedia(item);setAddMediaModal(false);setEditMedia(null);}} onDelete={editMedia?()=>{removeMedia(editMedia.id);setEditMedia(null);}:undefined}/>}
-    {showRollover&&<RolloverReview staleTasks={getPastIncompleteTasks()} onMoveTo={rolloverMoveTo} onMoveToForward={rolloverMoveToForward} onDiscard={rolloverDiscard} onClose={closeRollover}/>}
   </div>);
 }
 

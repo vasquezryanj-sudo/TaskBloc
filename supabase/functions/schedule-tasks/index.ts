@@ -124,10 +124,55 @@ function yesterdayKey(tz: string): string {
   return `${y}-${m}-${d}`;
 }
 
-Deno.serve(async () => {
+Deno.serve(async (req) => {
   try {
+    const url = new URL(req.url);
+    const action = url.searchParams.get("action");
+
     const tz = "America/New_York"; // user's local timezone
     const dayKey = todayKey(tz);
+
+    // ── Nightly rollover: move yesterday's incomplete tasks to today ──
+    if (action === "rollover") {
+      const yKey = yesterdayKey(tz);
+      const { data: incompleteTasks, error: fetchErr } = await sb
+        .from("tasks")
+        .select("*")
+        .eq("day_key", yKey)
+        .eq("complete", false);
+
+      if (fetchErr) throw fetchErr;
+      if (!incompleteTasks || incompleteTasks.length === 0) {
+        return new Response(JSON.stringify({ message: "No incomplete tasks to roll over", day_key: dayKey }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      // Get count of existing tasks for today to set position
+      const { data: existingToday } = await sb.from("tasks").select("id").eq("day_key", dayKey);
+      let pos = existingToday ? existingToday.length : 0;
+
+      const rolledOver: string[] = [];
+      for (const task of incompleteTasks) {
+        const { error: updateErr } = await sb
+          .from("tasks")
+          .update({ day_key: dayKey, position: pos++ })
+          .eq("id", task.id);
+        if (updateErr) {
+          console.error(`Failed to roll over "${task.name}":`, updateErr);
+          continue;
+        }
+        rolledOver.push(task.name);
+      }
+
+      return new Response(
+        JSON.stringify({ rolledOver: rolledOver.length, tasks: rolledOver, from: yKey, to: dayKey }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    // ── Schedule tasks flow ──
     const dateStr = todayISO(tz);
     const DAY_START = 12 * 60; // 12pm
     const DAY_END = 17 * 60; // 5pm
