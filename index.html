@@ -839,17 +839,17 @@ function MediaPage({items,onAdd,onEdit,onRemove,onToggleComplete,onUpdateQuotes,
   </div>);
 }
 
-function ProjectCard({project,incomplete,complete,onArchive,onOpen}){
+function ProjectCard({project,incomplete,complete,onArchive,onOpen,onProjectClick}){
   const [showDone,setShowDone]=useState(false);
-  return(<div className="proj-card" style={{borderLeftColor:project.color}}>
+  return(<div className="proj-card" style={{borderLeftColor:project.color,cursor:'pointer'}} onClick={()=>onProjectClick&&onProjectClick(project)}>
     <div className="proj-card-header">
       <div className="proj-card-dot" style={{background:project.color}}/>
       <div className="proj-card-name">{project.name}</div>
-      <button className="btn sm" onClick={onArchive}>Archive</button>
+      <button className="btn sm" onClick={e=>{e.stopPropagation();onArchive();}}>Archive</button>
     </div>
     {incomplete.length===0&&complete.length===0&&<div style={{fontSize:'12px',color:'var(--text3)',fontStyle:'italic',padding:'4px 0'}}>No tasks tagged with this project.</div>}
     {incomplete.length>0&&<div className="proj-task-list">
-      {incomplete.map(t=><div key={t.id+t.dayKey} className="proj-task-item" style={{cursor:'pointer'}} onClick={()=>onOpen&&onOpen(t)}>
+      {incomplete.map(t=><div key={t.id+t.dayKey} className="proj-task-item" style={{cursor:'pointer'}} onClick={e=>{e.stopPropagation();onOpen&&onOpen(t);}}>
         <span className="proj-task-dot" style={{background:project.color}}/>
         <span className="proj-task-name">{t.name}</span>
         {t.due&&<span className="task-date-label">Due: {t.due}</span>}
@@ -857,9 +857,9 @@ function ProjectCard({project,incomplete,complete,onArchive,onOpen}){
       </div>)}
     </div>}
     {complete.length>0&&<>
-      <button className="proj-done-toggle" onClick={()=>setShowDone(s=>!s)}>Completed ({complete.length}) {showDone?'▲':'▼'}</button>
+      <button className="proj-done-toggle" onClick={e=>{e.stopPropagation();setShowDone(s=>!s);}}>Completed ({complete.length}) {showDone?'▲':'▼'}</button>
       {showDone&&<div className="proj-task-list">
-        {complete.map(t=><div key={t.id+t.dayKey} className="proj-task-item done" style={{cursor:'pointer'}} onClick={()=>onOpen&&onOpen(t)}>
+        {complete.map(t=><div key={t.id+t.dayKey} className="proj-task-item done" style={{cursor:'pointer'}} onClick={e=>{e.stopPropagation();onOpen&&onOpen(t);}}>
           <span className="proj-task-check">✓</span>
           <div style={{flex:1,minWidth:0}}>
             <div className="proj-task-name" style={{textDecoration:'line-through',color:'var(--text3)'}}>{t.name}</div>
@@ -880,7 +880,7 @@ function ProjectCard({project,incomplete,complete,onArchive,onOpen}){
   </div>);
 }
 
-function ProjectsView({projects,tasks,forward,onArchive,onOpen}){
+function ProjectsView({projects,tasks,forward,onArchive,onOpen,onProjectClick}){
   const active=projects.filter(p=>!p.archived);
   const allTasks=[];
   Object.entries(tasks).forEach(([dayKey,ts])=>{ts.forEach(t=>allTasks.push({...t,dayKey}));});
@@ -892,7 +892,7 @@ function ProjectsView({projects,tasks,forward,onArchive,onOpen}){
       const tagged=allTasks.filter(t=>(t.tags||[]).map(tagName).includes(p.name));
       const incomplete=tagged.filter(t=>!t.complete);
       const complete=tagged.filter(t=>t.complete);
-      return <ProjectCard key={p.id} project={p} incomplete={incomplete} complete={complete} onArchive={()=>onArchive(p.id)} onOpen={onOpen}/>;
+      return <ProjectCard key={p.id} project={p} incomplete={incomplete} complete={complete} onArchive={()=>onArchive(p.id)} onOpen={onOpen} onProjectClick={onProjectClick}/>;
     })}
   </div>);
 }
@@ -974,6 +974,71 @@ function WeeklySummary({tasks,projects,onOpenTask}){
   </div>);
 }
 
+function ProjectDetailModal({project,tasks,forward,projects,onClose,onOpenTask,onAddTask}){
+  const [showCompleted,setShowCompleted]=useState(false);
+  const allTasks=[];
+  Object.entries(tasks).forEach(([dayKey,ts])=>{ts.forEach(t=>{if((t.tags||[]).map(tagName).includes(project.name))allTasks.push({...t,dayKey});});});
+  forward.forEach(t=>{if((t.tags||[]).map(tagName).includes(project.name))allTasks.push({...t,dayKey:'forward'});});
+  const pending=allTasks.filter(t=>!t.complete);
+  const completed=allTasks.filter(t=>t.complete);
+  return(<div className="overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+    <div className="modal">
+      <div className="modal-header">
+        <div style={{display:'flex',alignItems:'center',gap:'10px',flex:1,marginRight:'10px'}}>
+          <div style={{width:'14px',height:'14px',borderRadius:'50%',background:project.color,flexShrink:0}}/>
+          <div className="modal-title" style={{margin:0,color:project.color}}>{project.name}</div>
+        </div>
+        <button className="modal-close" onClick={onClose}>✕</button>
+      </div>
+      <div style={{height:'3px',background:project.color,borderRadius:'2px',margin:'-4px 0 0'}}/>
+      <div>
+        <div style={{fontSize:'9px',textTransform:'uppercase',letterSpacing:'1.2px',color:'var(--text3)',fontWeight:700,marginBottom:'8px'}}>Pending Tasks{pending.length>0?' ('+pending.length+')':''}</div>
+        {pending.length===0&&<div style={{fontSize:'12px',color:'var(--text3)',fontStyle:'italic',padding:'4px 0'}}>No pending tasks.</div>}
+        <div style={{display:'flex',flexDirection:'column',gap:'5px',maxHeight:'220px',overflowY:'auto'}}>
+          {pending.map(t=>(<div key={t.id+t.dayKey} className="proj-task-item" style={{cursor:'pointer'}} onClick={()=>onOpenTask(t,false)}>
+            <span className="proj-task-dot" style={{background:project.color}}/>
+            <span className="proj-task-name">{t.name}</span>
+            {t.due&&<span className="task-date-label">Due: {t.due}</span>}
+            {t.estimate&&<span className="estimate-tag">{t.estimate}</span>}
+          </div>))}
+        </div>
+      </div>
+      {completed.length>0&&<>
+        <button className="btn sm" onClick={()=>setShowCompleted(s=>!s)} style={{alignSelf:'flex-start'}}>Completed Tasks ({completed.length}) {showCompleted?'▲':'▼'}</button>
+        {showCompleted&&<div style={{display:'flex',flexDirection:'column',gap:'5px',maxHeight:'200px',overflowY:'auto'}}>
+          {completed.map(t=>(<div key={t.id+t.dayKey} className="proj-task-item done" style={{cursor:'pointer'}} onClick={()=>onOpenTask(t,true)}>
+            <span className="proj-task-check">✓</span>
+            <span className="proj-task-name" style={{textDecoration:'line-through',color:'var(--text3)'}}>{t.name}</span>
+            {t.estimate&&<span className="estimate-tag">{t.estimate}</span>}
+          </div>))}
+        </div>}
+      </>}
+      <button className="btn primary" onClick={onAddTask} style={{alignSelf:'flex-start'}}>+ Add Task</button>
+    </div>
+  </div>);
+}
+
+function ReadOnlyTaskModal({task,onClose,projects}){
+  return(<div className="overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+    <div className="modal">
+      <div className="modal-header"><div className="modal-title">{task.name}</div><button className="modal-close" onClick={onClose}>✕</button></div>
+      {task.status&&<div className="field"><label>Status</label><div style={{fontSize:'13px',color:'var(--text2)'}}>{task.status}</div></div>}
+      {(task.due||task.estimate)&&<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}}>
+        {task.due&&<div className="field"><label>Due</label><div style={{fontSize:'13px',color:'var(--text2)'}}>{task.due}</div></div>}
+        {task.estimate&&<div className="field"><label>Estimate</label><div style={{fontSize:'13px',color:'var(--text2)'}}>{task.estimate}</div></div>}
+      </div>}
+      {task.context&&<div className="field"><label>Context & Notes</label><div style={{fontSize:'13px',color:'var(--text2)',lineHeight:'1.6',whiteSpace:'pre-wrap'}}>{task.context}</div></div>}
+      {(task.tags||[]).length>0&&<div className="field"><label>Projects</label><div className="tag-chips-wrap">
+        {(task.tags||[]).map((t,i)=>{const n=tagName(t);const p=(projects||[]).find(pr=>pr.name===n);const c=p?p.color:'var(--text3)';return <span key={i} className="proj-chip" style={{background:c+'22',borderColor:c,color:c}}>{n}</span>;})}
+      </div></div>}
+      {(task.attachments||[]).length>0&&<div className="field"><label>Attachments</label><div className="attach-list">
+        {task.attachments.map(a=>{const{icon,cls}=fIcon(a.name);return <div key={a.id} className="attach-item"><div className={'a-icon '+cls}>{icon}</div><div className="a-info"><div className="a-name">{a.name}</div><div className="a-meta">{fmtSize(a.size)}</div></div></div>;})}
+      </div></div>}
+      <div className="modal-footer"><div/><button className="btn" onClick={onClose}>Close</button></div>
+    </div>
+  </div>);
+}
+
 function App(){
   const days=next8();
   const [tasks,setTasks]=useState({});
@@ -990,6 +1055,9 @@ function App(){
   const [addMediaModal,setAddMediaModal]=useState(false);
   const [editMedia,setEditMedia]=useState(null);
   const [projects,setProjects]=useState([]);
+  const [projectDetail,setProjectDetail]=useState(null);
+  const [readOnlyTask,setReadOnlyTask]=useState(null);
+  const [addingForProject,setAddingForProject]=useState(null);
 
   const fullSync=async()=>{setSyncStatus('syncing');try{const[t,f,p]=await Promise.all([dbLoadTasks(),dbLoadForward(),dbLoadProjects()]);setTasks(t);setForward(f);setProjects(p);setSyncStatus('ok');}catch(e){console.error(e);setSyncStatus('error');}};
   useEffect(()=>{fullSync();},[]);
@@ -1105,7 +1173,7 @@ function App(){
         <LookingForward items={forward} onDrop={moveToFwd} onRemove={remFwd} onOpen={t=>setEditFwd(t)} onAdd={addFwd} onToggle={toggleFwd}/>
       </>}
       {mobTab==='forward'&&<LookingForward items={forward} onDrop={moveToFwd} onRemove={remFwd} onOpen={t=>setEditFwd(t)} onAdd={addFwd} onToggle={toggleFwd}/>}
-      {mobTab==='projects'&&<ProjectsView projects={projects} tasks={tasks} forward={forward} onArchive={archiveProject} onOpen={t=>{if(t.dayKey==='forward')setEditFwd(t);else setEditing({task:t,dayKey:t.dayKey});}}/>}
+      {mobTab==='projects'&&<ProjectsView projects={projects} tasks={tasks} forward={forward} onArchive={archiveProject} onOpen={t=>{if(t.dayKey==='forward')setEditFwd(t);else setEditing({task:t,dayKey:t.dayKey});}} onProjectClick={p=>setProjectDetail(p)}/>}
       {mobTab==='summary'&&<WeeklySummary tasks={tasks} projects={projects} onOpenTask={(t,k)=>setEditing({task:t,dayKey:k})}/>}
       {mobTab==='reading'&&(!showAllCompleted
         ?<MediaPage items={mediaItems} onAdd={()=>setAddMediaModal(true)} onEdit={setEditMedia} onRemove={removeMedia} onToggleComplete={toggleMediaComplete} onUpdateQuotes={updateMediaQuotes} onViewAll={()=>setShowAllCompleted(true)}/>
@@ -1121,6 +1189,9 @@ function App(){
 
     {editing&&<TaskModal task={editing.task} onClose={()=>setEditing(null)} onSave={u=>{saveTask(editing.dayKey,u);setEditing(null);}} onDelete={()=>delTask(editing.dayKey,editing.task.id)} projects={projects} onCreateProject={createProject}/>}
     {editFwd&&<TaskModal task={editFwd} onClose={()=>setEditFwd(null)} onSave={u=>{saveFwd(u);setEditFwd(null);}} onDelete={()=>delFwd(editFwd.id)} projects={projects} onCreateProject={createProject}/>}
+    {projectDetail&&<ProjectDetailModal project={projectDetail} tasks={tasks} forward={forward} projects={projects} onClose={()=>setProjectDetail(null)} onOpenTask={(t,readOnly)=>{if(readOnly){setReadOnlyTask(t);}else{if(t.dayKey==='forward')setEditFwd(t);else setEditing({task:t,dayKey:t.dayKey});}}} onAddTask={()=>{setAddingForProject({id:uid(),name:'',status:'',context:'',complete:false,attachments:[],tags:[projectDetail.name],due:'',estimate:'',recurring:false,recurringFrequency:''});}}/>}
+    {readOnlyTask&&<ReadOnlyTaskModal task={readOnlyTask} onClose={()=>setReadOnlyTask(null)} projects={projects}/>}
+    {addingForProject&&<TaskModal task={addingForProject} onClose={()=>setAddingForProject(null)} onSave={u=>{const todayKey=dk(new Date());setTasks(prev=>{const next={...prev,[todayKey]:[...(prev[todayKey]||[]),u]};scheduleSave(next,forward);return next;});setAddingForProject(null);}} onDelete={()=>setAddingForProject(null)} projects={projects} onCreateProject={createProject}/>}
     {(addMediaModal||editMedia)&&<MediaEntryModal entry={editMedia||{}} onClose={()=>{setAddMediaModal(false);setEditMedia(null);}} onSave={item=>{editMedia?updateMedia(item):addMedia(item);setAddMediaModal(false);setEditMedia(null);}} onDelete={editMedia?()=>{removeMedia(editMedia.id);setEditMedia(null);}:undefined}/>}
   </div>);
 }
