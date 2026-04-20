@@ -363,6 +363,35 @@ body{background-image:radial-gradient(ellipse at 15% 80%,rgba(192,72,32,0.04) 0%
 .proj-chip{display:inline-flex;align-items:center;gap:3px;border-radius:8px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;transition:all .15s;border:1.5px solid;user-select:none;}
 .proj-chip:hover{transform:translateY(-1px);box-shadow:0 2px 6px var(--shadow);}
 
+/* SETTINGS */
+.settings-gear{background:none;border:none;cursor:pointer;font-size:16px;color:var(--text3);padding:4px;border-radius:8px;transition:all .2s;line-height:1;}
+.settings-gear:hover{color:var(--text);transform:rotate(45deg);}
+.settings-overlay{position:fixed;inset:0;background:rgba(30,20,10,.35);z-index:250;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);animation:overlayIn .2s both;}
+.settings-drawer{position:fixed;top:0;right:0;bottom:0;width:320px;background:var(--surface);border-left:1px solid var(--border);box-shadow:-4px 0 24px var(--shadow2);display:flex;flex-direction:column;z-index:251;animation:settingsSlideIn .3s cubic-bezier(.4,0,.2,1) both;overflow-y:auto;}
+@keyframes settingsSlideIn{from{transform:translateX(100%);}to{transform:translateX(0);}}
+.settings-header{display:flex;justify-content:space-between;align-items:center;padding:20px 20px 14px;border-bottom:1px solid var(--border);}
+.settings-title{font-family:'Fraunces',serif;font-weight:700;font-size:19px;color:var(--text);letter-spacing:-0.2px;}
+.settings-section-label{font-weight:700;font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:var(--text3);padding:16px 20px 6px;font-family:'Plus Jakarta Sans',sans-serif;}
+.settings-item{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;min-height:44px;cursor:default;transition:background .15s;}
+.settings-item:hover{background:var(--surface2);}
+.settings-item-left{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0;}
+.settings-item-label{font-size:13px;font-weight:600;color:var(--text);}
+.settings-item-sub{font-size:11px;color:var(--text3);font-style:italic;}
+.settings-soon{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);background:var(--surface3);border:1px solid var(--border);border-radius:6px;padding:2px 7px;white-space:nowrap;flex-shrink:0;}
+.settings-toggle{width:36px;height:20px;border-radius:10px;background:var(--surface3);border:1.5px solid var(--border);position:relative;flex-shrink:0;cursor:not-allowed;}
+.settings-toggle::after{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:var(--border2);transition:transform .2s;}
+.settings-divider{height:1px;background:linear-gradient(90deg,transparent,var(--border),transparent);margin:0 20px;}
+.settings-version{font-size:10px;color:var(--text3);text-align:center;padding:20px;margin-top:auto;font-style:italic;}
+.settings-drag-handle{display:none;}
+.mob-gear{display:none;}
+@media(max-width:680px){
+  .settings-drawer{top:auto;right:0;bottom:0;left:0;width:100%;height:85dvh;border-left:none;border-top:1px solid var(--border);border-radius:20px 20px 0 0;animation:settingsSlideUp .3s cubic-bezier(.4,0,.2,1) both;padding-bottom:calc(12px + var(--safe-bottom));}
+  @keyframes settingsSlideUp{from{transform:translateY(100%);}to{transform:translateY(0);}}
+  .settings-drag-handle{display:block;width:36px;height:4px;border-radius:2px;background:var(--border2);margin:10px auto 0;}
+  .mob-gear{display:flex;position:fixed;top:10px;right:12px;z-index:99;width:36px;height:36px;align-items:center;justify-content:center;background:rgba(255,253,247,.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid var(--border);border-radius:50%;cursor:pointer;font-size:16px;color:var(--text3);transition:all .2s;box-shadow:0 1px 4px var(--shadow);}
+  .mob-gear:hover{color:var(--text);}
+}
+
 /* ANIMATIONS */
 @keyframes fadeUp{from{opacity:0;transform:translateY(16px);}to{opacity:1;transform:translateY(0);}}
 
@@ -1018,6 +1047,65 @@ function ProjectDetailModal({project,tasks,forward,projects,onClose,onOpenTask,o
   </div>);
 }
 
+function SettingsDrawer({onClose}){
+  const [showAbout,setShowAbout]=useState(false);
+  return(<>
+    <div className="settings-overlay" onClick={onClose}/>
+    <div className="settings-drawer">
+      <div className="settings-drag-handle"/>
+      <div className="settings-header">
+        <div className="settings-title">Settings</div>
+        <button className="modal-close" onClick={onClose}>✕</button>
+      </div>
+      <div className="settings-section-label">Account</div>
+      <div className="settings-item" style={{opacity:.55,cursor:'default'}}>
+        <div className="settings-item-left"><div className="settings-item-label">Connect Google Calendar</div></div>
+        <span className="settings-soon">Coming soon</span>
+      </div>
+      <div className="settings-item" style={{opacity:.55,cursor:'default'}}>
+        <div className="settings-item-left"><div className="settings-item-label">Sign in with Google</div></div>
+        <span className="settings-soon">Coming soon</span>
+      </div>
+      <div className="settings-divider"/>
+      <div className="settings-section-label">Preferences</div>
+      <div className="settings-item" style={{opacity:.55,cursor:'default'}}>
+        <div className="settings-item-left"><div className="settings-item-label">Scheduling Window</div><div className="settings-item-sub">12:00pm – 5:00pm</div></div>
+        <span className="settings-soon">Coming soon</span>
+      </div>
+      <div className="settings-item" style={{opacity:.55,cursor:'default'}}>
+        <div className="settings-item-left"><div className="settings-item-label">Notifications</div></div>
+        <div style={{display:'flex',alignItems:'center',gap:'8px'}}><span className="settings-soon">Coming soon</span><div className="settings-toggle"/></div>
+      </div>
+      <div className="settings-item" style={{opacity:.55,cursor:'default'}}>
+        <div className="settings-item-left"><div className="settings-item-label">Dark Mode</div></div>
+        <div style={{display:'flex',alignItems:'center',gap:'8px'}}><span className="settings-soon">Coming soon</span><div className="settings-toggle"/></div>
+      </div>
+      <div className="settings-divider"/>
+      <div className="settings-section-label">Support</div>
+      <a href="mailto:vasquezryanj@gmail.com?subject=TaskBloc Feedback" style={{textDecoration:'none'}}><div className="settings-item" style={{cursor:'pointer'}}>
+        <div className="settings-item-left"><div className="settings-item-label">Send Feedback</div><div className="settings-item-sub">vasquezryanj@gmail.com</div></div>
+        <span style={{fontSize:'14px',color:'var(--text3)'}}>→</span>
+      </div></a>
+      <div className="settings-item" style={{opacity:.55,cursor:'default'}}>
+        <div className="settings-item-left"><div className="settings-item-label">Privacy Policy</div></div>
+        <span className="settings-soon">Coming soon</span>
+      </div>
+      <div className="settings-item" style={{cursor:'pointer'}} onClick={()=>setShowAbout(a=>!a)}>
+        <div className="settings-item-left"><div className="settings-item-label">About</div></div>
+        <span style={{fontSize:'14px',color:'var(--text3)'}}>{showAbout?'▲':'▼'}</span>
+      </div>
+      {showAbout&&<div style={{padding:'0 20px 12px'}}>
+        <div style={{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:'12px',padding:'14px 16px'}}>
+          <div style={{fontFamily:"'Fraunces',serif",fontWeight:700,fontSize:'16px',color:'var(--accent)',marginBottom:'4px'}}>TaskBloc</div>
+          <div style={{fontSize:'10px',color:'var(--text3)',marginBottom:'8px'}}>v1.0</div>
+          <div style={{fontSize:'12px',color:'var(--text2)',lineHeight:'1.6'}}>TaskBloc is a personal task manager built for focused, day-by-day productivity.</div>
+        </div>
+      </div>}
+      <div className="settings-version">TaskBloc v1.0</div>
+    </div>
+  </>);
+}
+
 function ReadOnlyTaskModal({task,onClose,projects}){
   return(<div className="overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
     <div className="modal">
@@ -1058,6 +1146,7 @@ function App(){
   const [projectDetail,setProjectDetail]=useState(null);
   const [readOnlyTask,setReadOnlyTask]=useState(null);
   const [addingForProject,setAddingForProject]=useState(null);
+  const [showSettings,setShowSettings]=useState(false);
 
   const fullSync=async()=>{setSyncStatus('syncing');try{const[t,f,p]=await Promise.all([dbLoadTasks(),dbLoadForward(),dbLoadProjects()]);setTasks(t);setForward(f);setProjects(p);setSyncStatus('ok');}catch(e){console.error(e);setSyncStatus('error');}};
   useEffect(()=>{fullSync();},[]);
@@ -1150,7 +1239,10 @@ function App(){
 
   return(<div className="app">
     <div className="sidebar">
-      <div className="sidebar-logo" style={{cursor:'pointer'}} onClick={()=>{setSel(0);setMobTab('today');}}>TaskBloc</div>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+        <div className="sidebar-logo" style={{cursor:'pointer'}} onClick={()=>{setSel(0);setMobTab('today');}}>TaskBloc</div>
+        <button className="settings-gear" onClick={()=>setShowSettings(true)} title="Settings">⚙</button>
+      </div>
       <div className="sidebar-sub">your days, organized</div>
       <SyncStatus status={syncStatus} onSync={fullSync}/>
       <div className="sidebar-section">This Week</div>
@@ -1181,6 +1273,7 @@ function App(){
       )}
     </div>
 
+    <button className="mob-gear" onClick={()=>setShowSettings(true)} title="Settings">⚙</button>
     <nav className="mob-nav">
       <button className={'mob-btn'+(mobTab==='today'?' active':'')} onClick={()=>setMobTab('today')}><span className="mob-icon">📋</span>Today</button>
       <button className={'mob-btn'+(mobTab==='projects'?' active':'')} onClick={()=>setMobTab('projects')}><span className="mob-icon">📂</span>Projects</button>
@@ -1192,6 +1285,7 @@ function App(){
     {projectDetail&&<ProjectDetailModal project={projectDetail} tasks={tasks} forward={forward} projects={projects} onClose={()=>setProjectDetail(null)} onOpenTask={(t,readOnly)=>{if(readOnly){setReadOnlyTask(t);}else{if(t.dayKey==='forward')setEditFwd(t);else setEditing({task:t,dayKey:t.dayKey});}}} onAddTask={()=>{setAddingForProject({id:uid(),name:'',status:'',context:'',complete:false,attachments:[],tags:[projectDetail.name],due:'',estimate:'',recurring:false,recurringFrequency:''});}}/>}
     {readOnlyTask&&<ReadOnlyTaskModal task={readOnlyTask} onClose={()=>setReadOnlyTask(null)} projects={projects}/>}
     {addingForProject&&<TaskModal task={addingForProject} onClose={()=>setAddingForProject(null)} onSave={u=>{const todayKey=dk(new Date());setTasks(prev=>{const next={...prev,[todayKey]:[...(prev[todayKey]||[]),u]};scheduleSave(next,forward);return next;});setAddingForProject(null);}} onDelete={()=>setAddingForProject(null)} projects={projects} onCreateProject={createProject}/>}
+    {showSettings&&<SettingsDrawer onClose={()=>setShowSettings(false)}/>}
     {(addMediaModal||editMedia)&&<MediaEntryModal entry={editMedia||{}} onClose={()=>{setAddMediaModal(false);setEditMedia(null);}} onSave={item=>{editMedia?updateMedia(item):addMedia(item);setAddMediaModal(false);setEditMedia(null);}} onDelete={editMedia?()=>{removeMedia(editMedia.id);setEditMedia(null);}:undefined}/>}
   </div>);
 }
