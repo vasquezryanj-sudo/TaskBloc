@@ -354,7 +354,7 @@ body{background-image:radial-gradient(ellipse at 15% 80%,rgba(192,72,32,0.04) 0%
 .proj-task-list{display:flex;flex-direction:column;gap:5px;}
 .proj-task-item{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:9px;font-size:12px;color:var(--text);transition:all .15s;}
 .proj-task-item:hover{background:var(--surface);border-color:var(--border2);}
-.proj-task-item.done{opacity:.75;}
+.proj-task-item.done{}
 .proj-task-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
 .proj-task-check{width:16px;height:16px;border-radius:50%;background:var(--accent2);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:9px;color:#fff;font-weight:700;}
 .proj-task-name{flex:1;min-width:0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -947,7 +947,7 @@ function WeeklySummary({tasks,projects,onOpenTask}){
           <div style={{display:'flex',flexDirection:'column',gap:'5px'}}>
             {pTasks.map(t=><div key={t.id} style={{display:'flex',alignItems:'center',gap:'8px',padding:'7px 10px',background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:'9px',cursor:'pointer',transition:'all .15s'}} onClick={()=>onOpenTask(t,t.dayKey)}>
               <span style={{width:'14px',height:'14px',borderRadius:'50%',background:'var(--accent2)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'8px',color:'#fff',fontWeight:700,flexShrink:0}}>✓</span>
-              <span style={{flex:1,fontSize:'12px',fontWeight:600,color:'var(--text)',textDecoration:'line-through',opacity:.7}}>{t.name}</span>
+              <span style={{flex:1,fontSize:'12px',fontWeight:600,color:'var(--text)',textDecoration:'line-through'}}>{t.name}</span>
               {t.estimate&&<span className="estimate-tag">{t.estimate}</span>}
             </div>)}
           </div>
@@ -962,7 +962,7 @@ function WeeklySummary({tasks,projects,onOpenTask}){
         <div style={{display:'flex',flexDirection:'column',gap:'5px'}}>
           {dayData.tasks.map(t=><div key={t.id} style={{display:'flex',alignItems:'center',gap:'8px',padding:'7px 10px',background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:'9px',cursor:'pointer',transition:'all .15s'}} onClick={()=>onOpenTask(t,k)}>
             <span style={{width:'14px',height:'14px',borderRadius:'50%',background:'var(--accent2)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'8px',color:'#fff',fontWeight:700,flexShrink:0}}>✓</span>
-            <span style={{flex:1,fontSize:'12px',fontWeight:600,color:'var(--text)',textDecoration:'line-through',opacity:.7}}>{t.name}</span>
+            <span style={{flex:1,fontSize:'12px',fontWeight:600,color:'var(--text)',textDecoration:'line-through'}}>{t.name}</span>
             {t.estimate&&<span className="estimate-tag">{t.estimate}</span>}
             {(t.tags||[]).map((tg,i)=>{const n=tagName(tg);const p=(projects||[]).find(pr=>pr.name===n);const c=p?p.color:'var(--text3)';return <span key={i} style={{display:'inline-block',width:'8px',height:'8px',borderRadius:'50%',background:c,flexShrink:0}}/>;
             })}
