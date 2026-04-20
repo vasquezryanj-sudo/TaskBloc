@@ -1086,10 +1086,10 @@ function SettingsDrawer({onClose}){
         <div className="settings-item-left"><div className="settings-item-label">Send Feedback</div><div className="settings-item-sub">vasquezryanj@gmail.com</div></div>
         <span style={{fontSize:'14px',color:'var(--text3)'}}>→</span>
       </div></a>
-      <div className="settings-item" style={{opacity:.55,cursor:'default'}}>
+      <a href="https://www.withprovenance.org/taskbloc/taskbloc_privacy.html" target="_blank" rel="noopener noreferrer" style={{textDecoration:'none'}}><div className="settings-item" style={{cursor:'pointer'}}>
         <div className="settings-item-left"><div className="settings-item-label">Privacy Policy</div></div>
-        <span className="settings-soon">Coming soon</span>
-      </div>
+        <span style={{fontSize:'14px',color:'var(--text3)'}}>→</span>
+      </div></a>
       <div className="settings-item" style={{cursor:'pointer'}} onClick={()=>setShowAbout(a=>!a)}>
         <div className="settings-item-left"><div className="settings-item-label">About</div></div>
         <span style={{fontSize:'14px',color:'var(--text3)'}}>{showAbout?'▲':'▼'}</span>
