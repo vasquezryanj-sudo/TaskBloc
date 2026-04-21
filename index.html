@@ -190,6 +190,22 @@ body{background-image:radial-gradient(ellipse at 15% 80%,rgba(192,72,32,0.04) 0%
 .trash-btn{background:none;border:1.5px solid #f0b8b8;border-radius:20px;color:#c0392b;cursor:pointer;padding:6px 13px;display:flex;align-items:center;gap:5px;font-family:'Plus Jakarta Sans',sans-serif;font-size:12px;font-weight:600;transition:all .2s cubic-bezier(.4,0,.2,1);}
 .trash-btn:hover{background:#fde8e8;transform:translateY(-1px);}
 
+/* ROLLOVER MODAL */
+.rollover-list{display:flex;flex-direction:column;gap:8px;max-height:340px;overflow-y:auto;padding:2px 0;}
+.rollover-item{display:flex;align-items:center;gap:10px;background:var(--surface2);border:1.5px solid var(--border);border-radius:12px;padding:10px 12px;transition:all .2s cubic-bezier(.4,0,.2,1);}
+.rollover-item:hover{border-color:var(--border2);background:var(--surface);}
+.rollover-item-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex-shrink:0;opacity:.7;}
+.rollover-item-name{flex:1;font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+.rollover-item-status{font-size:10px;color:var(--text3);font-style:italic;white-space:nowrap;}
+.rollover-actions{display:flex;gap:5px;flex-shrink:0;}
+.rollover-actions .btn{padding:4px 10px;font-size:10px;border-radius:14px;}
+.rollover-actions .btn.complete{background:var(--accent2-light);border-color:var(--accent2);color:var(--accent2);}
+.rollover-actions .btn.complete:hover{background:var(--accent2);color:#fff;}
+.rollover-actions .btn.remove{background:var(--accent-light);border-color:var(--accent);color:var(--accent);}
+.rollover-actions .btn.remove:hover{background:var(--accent);color:#fff;}
+.rollover-sub{font-size:12px;color:var(--text3);line-height:1.5;font-style:italic;}
+.rollover-footer{display:flex;justify-content:flex-end;gap:8px;padding-top:8px;border-top:1px solid var(--border);}
+
 /* ATTACHMENTS */
 .file-drop{border:2px dashed var(--border2);border-radius:12px;padding:20px;text-align:center;cursor:pointer;transition:all .25s cubic-bezier(.4,0,.2,1);background:var(--surface2);position:relative;}
 .file-drop:hover,.file-drop.over{border-color:var(--accent);background:var(--accent-light);border-style:solid;}
@@ -432,6 +448,10 @@ let currentUserId=null;
 
 const next8=()=>Array.from({length:8},(_,i)=>{const d=new Date();d.setDate(d.getDate()+i);return d;});
 const dk=d=>d.getFullYear()+'-'+d.getMonth()+'-'+d.getDate();
+const estNow=()=>new Date(new Date().toLocaleString('en-US',{timeZone:'America/New_York'}));
+const estTodayKey=()=>{const d=estNow();return dk(d);};
+const parseDk=k=>{const[y,m,d]=k.split('-').map(Number);return new Date(y,m,d);};
+const ROLLOVER_KEY='taskbloc_last_rollover';
 const uid=()=>Math.random().toString(36).slice(2);
 const fIcon=n=>{if(!n)return{icon:'🔗',cls:'lnk'};const e=n.split('.').pop().toLowerCase();if(['jpg','jpeg','png','gif','webp','svg'].includes(e))return{icon:'🖼',cls:'img'};if(e==='pdf')return{icon:'📄',cls:'pdf'};if(['doc','docx','txt','md'].includes(e))return{icon:'📝',cls:'doc'};return{icon:'📎',cls:'def'};};
 const fmtSize=b=>{if(!b)return'';if(b<1024)return b+' B';if(b<1048576)return(b/1024).toFixed(1)+' KB';return(b/1048576).toFixed(1)+' MB';};
@@ -620,13 +640,40 @@ function DoneBadges({tasks}){
   );
 }
 
-function TaskItem({task,onToggle,onOpen,onDragStart,onDragOver,onDrop,isDragging,isDragOver,projects}){
+function RolloverModal({tasks,onComplete,onDelete,onKeep,onKeepAll}){
+  return(<div className="overlay" onClick={e=>e.target===e.currentTarget&&onKeepAll()}>
+    <div className="modal" style={{maxWidth:520}}>
+      <div className="modal-header">
+        <div><div className="modal-title">Yesterday's Unfinished Tasks</div><div className="rollover-sub">These tasks weren't completed. What would you like to do with each?</div></div>
+        <button className="modal-close" onClick={onKeepAll}>✕</button>
+      </div>
+      <div className="rollover-list">
+        {tasks.map(t=>(
+          <div key={t.id} className="rollover-item">
+            <div className="rollover-item-dot"/>
+            <div className="rollover-item-name" title={t.name}>{t.name}</div>
+            {t.status&&<div className="rollover-item-status">{t.status}</div>}
+            <div className="rollover-actions">
+              <button className="btn complete" onClick={()=>onComplete(t.id)} title="Mark complete">✓ Done</button>
+              <button className="btn remove" onClick={()=>onDelete(t.id)} title="Delete task">✕</button>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="rollover-footer">
+        <button className="btn primary" onClick={onKeepAll}>Keep All on Today's List</button>
+      </div>
+    </div>
+  </div>);
+}
+
+function TaskItem({task,onToggle,onOpen,onDragStart,onDragEnd,onDragOver,onDrop,isDragging,isDragOver,projects}){
   const [completing,setCompleting]=useState(false);
   const handleToggle=()=>{
     if(!task.complete){setCompleting(true);setTimeout(()=>{onToggle(task.id);setCompleting(false);},280);}
     else onToggle(task.id);
   };
-  return(<div className={'task-item'+(isDragging?' dragging':'')+(isDragOver?' drag-over':'')+(completing?' completing':'')} draggable onDragStart={e=>onDragStart(e,task.id)} onDragOver={e=>{e.preventDefault();onDragOver(task.id);}} onDrop={e=>{e.preventDefault();onDrop(task.id);}}>
+  return(<div className={'task-item'+(isDragging?' dragging':'')+(isDragOver?' drag-over':'')+(completing?' completing':'')} draggable onDragStart={e=>onDragStart(e,task.id)} onDragEnd={onDragEnd} onDragOver={e=>{e.preventDefault();onDragOver(task.id);}} onDrop={e=>{e.preventDefault();onDrop(task.id);}}>
     <span className="drag-handle" onMouseDown={e=>e.stopPropagation()}>⠿</span>
     <div className="task-check-zone" onClick={e=>{e.stopPropagation();handleToggle();}}>
       <div className={'task-check'+(task.complete?' on':'')}/>
@@ -646,6 +693,7 @@ function DayBlock({date,tasks,isToday,onAdd,onToggle,onOpen,onUpdateTasks,onMove
   const [newName,setNewName]=useState('');const [dragOver,setDragOver]=useState(null);const [draggingId,setDraggingId]=useState(null);const [zoneActive,setZoneActive]=useState(false);
   const key=dk(date);
   const hDragStart=(e,id)=>{setDraggingId(id);e.dataTransfer.setData('taskId',id);e.dataTransfer.setData('fromDay',key);};
+  const hDragEnd=()=>{setDraggingId(null);setDragOver(null);};
   const hDrop=tid=>{if(!draggingId||draggingId===tid){setDraggingId(null);setDragOver(null);return;}const fi=tasks.findIndex(t=>t.id===draggingId),ti=tasks.findIndex(t=>t.id===tid);if(fi===-1||ti===-1)return;const arr=[...tasks];const[m]=arr.splice(fi,1);arr.splice(ti,0,m);onUpdateTasks(key,arr);setDraggingId(null);setDragOver(null);};
   const hZoneDrop=e=>{e.preventDefault();const tid=e.dataTransfer.getData('taskId'),fd=e.dataTransfer.getData('fromDay');if(fd==='forward')onMoveFromForward(tid,key);else if(fd&&fd!==key)onMoveTask(fd,key,tid);setZoneActive(false);};
   const add=()=>{if(!newName.trim())return;onAdd(key,newName.trim());setNewName('');};
@@ -664,7 +712,7 @@ function DayBlock({date,tasks,isToday,onAdd,onToggle,onOpen,onUpdateTasks,onMove
       <div className="add-row"><input className="add-input" placeholder="Add a task…" value={newName} onChange={e=>setNewName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&add()}/><button className="btn primary" onClick={add}>Add</button></div>
       <div className="task-list-wrap">
         {tasks.length===0&&<div style={{textAlign:'center',padding:'18px 10px'}}><div style={{fontFamily:"'Fraunces',serif",fontSize:'14px',color:'var(--text3)',fontStyle:'italic',lineHeight:'1.6'}}>Nothing on the list yet.</div><div style={{fontSize:'11px',color:'var(--text3)',marginTop:'4px'}}>Add something to get started.</div></div>}
-        {inc.map(t=><TaskItem key={t.id} task={t} onToggle={id=>onToggle(key,id)} onOpen={onOpen} onDragStart={hDragStart} onDragOver={setDragOver} onDrop={hDrop} isDragging={draggingId===t.id} isDragOver={dragOver===t.id} projects={projects}/>)}
+        {inc.map(t=><TaskItem key={t.id} task={t} onToggle={id=>onToggle(key,id)} onOpen={onOpen} onDragStart={hDragStart} onDragEnd={hDragEnd} onDragOver={setDragOver} onDrop={hDrop} isDragging={draggingId===t.id} isDragOver={dragOver===t.id} projects={projects}/>)}
       </div>
       {tasks.length>0&&<div className={'drop-zone-hint'+(zoneActive?' active':'')} onDragOver={e=>{e.preventDefault();setZoneActive(true);}} onDragLeave={()=>setZoneActive(false)} onDrop={hZoneDrop}>drag a task here from another day</div>}
     </div>
@@ -1214,6 +1262,7 @@ function App(){
   const [readOnlyTask,setReadOnlyTask]=useState(null);
   const [addingForProject,setAddingForProject]=useState(null);
   const [showSettings,setShowSettings]=useState(false);
+  const [rolloverTasks,setRolloverTasks]=useState([]);
 
   useEffect(()=>{
     sb.auth.getSession().then(({data:{session:s}})=>{
@@ -1231,7 +1280,40 @@ function App(){
 
   const handleLogout=async()=>{await sb.auth.signOut();setShowSettings(false);};
 
-  const fullSync=async()=>{setSyncStatus('syncing');try{const[t,f,p]=await Promise.all([dbLoadTasks(),dbLoadForward(),dbLoadProjects()]);setTasks(t);setForward(f);setProjects(p);setSyncStatus('ok');}catch(e){console.error(e);setSyncStatus('error');}};
+  const fullSync=async()=>{setSyncStatus('syncing');try{const[t,f,p]=await Promise.all([dbLoadTasks(),dbLoadForward(),dbLoadProjects()]);setTasks(t);setForward(f);setProjects(p);setSyncStatus('ok');checkRollover(t);}catch(e){console.error(e);setSyncStatus('error');}};
+
+  const checkRollover=(tasksObj)=>{
+    const todayKey=estTodayKey();
+    const lastRollover=localStorage.getItem(ROLLOVER_KEY);
+    if(lastRollover===todayKey)return; // already processed today
+    const today=estNow();today.setHours(0,0,0,0);
+    const rollovers=[];
+    Object.entries(tasksObj).forEach(([dayKey,dayTasks])=>{
+      const d=parseDk(dayKey);
+      if(d<today){
+        dayTasks.filter(t=>!t.complete).forEach(t=>rollovers.push({...t,_fromDayKey:dayKey}));
+      }
+    });
+    if(rollovers.length>0){
+      // Move incomplete past tasks to today
+      setTasks(prev=>{
+        const next={...prev};
+        const todayArr=[...(next[todayKey]||[])];
+        rollovers.forEach(t=>{
+          const fromKey=t._fromDayKey;
+          if(next[fromKey])next[fromKey]=next[fromKey].filter(x=>x.id!==t.id);
+          const{_fromDayKey,...clean}=t;
+          todayArr.push(clean);
+        });
+        next[todayKey]=todayArr;
+        // Schedule save for the moved tasks
+        setForward(fwd=>{scheduleSave(next,fwd);return fwd;});
+        return next;
+      });
+      setRolloverTasks(rollovers.map(t=>{const{_fromDayKey,...clean}=t;return clean;}));
+    }
+    localStorage.setItem(ROLLOVER_KEY,todayKey);
+  };
   useEffect(()=>{if(session)fullSync();},[session]);
 
   const scheduleSave=(tasksObj,fwdArr)=>{
@@ -1262,6 +1344,20 @@ function App(){
 
   const createProject=p=>{setProjects(prev=>[...prev,p]);dbUpsertProject(p).catch(console.error);};
   const archiveProject=id=>{setProjects(prev=>prev.map(p=>p.id===id?{...p,archived:true}:p));const proj=projects.find(p=>p.id===id);if(proj)dbUpsertProject({...proj,archived:true}).catch(console.error);};
+
+  // Rollover actions
+  const rolloverComplete=id=>{
+    const todayKey=estTodayKey();
+    setTasks(prev=>{const next={...prev,[todayKey]:(prev[todayKey]||[]).map(t=>t.id===id?{...t,complete:true}:t)};scheduleSave(next,forward);return next;});
+    setRolloverTasks(prev=>{const next=prev.filter(t=>t.id!==id);return next;});
+  };
+  const rolloverDelete=id=>{
+    const todayKey=estTodayKey();
+    dbDeleteTask(id);
+    setTasks(prev=>{const next={...prev,[todayKey]:(prev[todayKey]||[]).filter(t=>t.id!==id)};scheduleSave(next,forward);return next;});
+    setRolloverTasks(prev=>prev.filter(t=>t.id!==id));
+  };
+  const rolloverKeepAll=()=>setRolloverTasks([]);
 
   /* ── pull-to-refresh (mobile) ── */
   const [pullY,setPullY]=useState(0);
@@ -1373,6 +1469,7 @@ function App(){
     {addingForProject&&<TaskModal task={addingForProject} onClose={()=>setAddingForProject(null)} onSave={u=>{const todayKey=dk(new Date());setTasks(prev=>{const next={...prev,[todayKey]:[...(prev[todayKey]||[]),u]};scheduleSave(next,forward);return next;});setAddingForProject(null);}} onDelete={()=>setAddingForProject(null)} projects={projects} onCreateProject={createProject}/>}
     {showSettings&&<SettingsDrawer onClose={()=>setShowSettings(false)} user={user} onLogout={handleLogout}/>}
     {(addMediaModal||editMedia)&&<MediaEntryModal entry={editMedia||{}} onClose={()=>{setAddMediaModal(false);setEditMedia(null);}} onSave={item=>{editMedia?updateMedia(item):addMedia(item);setAddMediaModal(false);setEditMedia(null);}} onDelete={editMedia?()=>{removeMedia(editMedia.id);setEditMedia(null);}:undefined}/>}
+    {rolloverTasks.length>0&&<RolloverModal tasks={rolloverTasks} onComplete={rolloverComplete} onDelete={rolloverDelete} onKeep={id=>setRolloverTasks(prev=>prev.filter(t=>t.id!==id))} onKeepAll={rolloverKeepAll}/>}
   </div>);
 }
 
