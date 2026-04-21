@@ -401,6 +401,20 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline-offset:1
 
 /* SELECTION */
 ::selection{background:rgba(192,72,32,.15);color:var(--text);}
+
+/* LOGIN SCREEN */
+.login-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100dvh;background:var(--bg);background-image:radial-gradient(ellipse at 15% 80%,rgba(192,72,32,0.06) 0%,transparent 50%),radial-gradient(ellipse at 85% 15%,rgba(109,80,160,0.04) 0%,transparent 50%);padding:40px 24px;gap:0;}
+.login-logo{font-family:'Fraunces',serif;font-weight:700;font-size:48px;color:var(--accent);letter-spacing:-1px;margin-bottom:6px;}
+.login-tagline{font-size:14px;color:var(--text3);font-style:italic;letter-spacing:0.3px;margin-bottom:48px;text-align:center;}
+.login-card{background:var(--surface);border:1.5px solid var(--border);border-radius:24px;padding:36px 32px;display:flex;flex-direction:column;align-items:center;gap:20px;box-shadow:0 2px 8px var(--shadow),0 8px 32px var(--shadow2);width:100%;max-width:360px;}
+.login-card-title{font-family:'Fraunces',serif;font-weight:600;font-size:18px;color:var(--text);text-align:center;}
+.login-card-sub{font-size:12px;color:var(--text3);text-align:center;line-height:1.6;margin-top:-8px;}
+.login-google-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:13px 20px;background:var(--surface);border:1.5px solid var(--border2);border-radius:14px;cursor:pointer;font-size:14px;font-weight:600;color:var(--text);transition:all .2s cubic-bezier(.4,0,.2,1);box-shadow:0 1px 4px var(--shadow);}
+.login-google-btn:hover{background:var(--surface2);border-color:var(--accent);box-shadow:0 2px 8px var(--shadow2);transform:translateY(-1px);}
+.login-google-btn:active{transform:translateY(0);}
+.login-google-icon{width:20px;height:20px;flex-shrink:0;}
+.login-footer{font-size:11px;color:var(--text3);text-align:center;line-height:1.6;max-width:280px;}
+.login-footer a{color:var(--accent);text-decoration:none;}
 </style>
 </head>
 <body>
@@ -414,6 +428,7 @@ const MS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec
 const SUPA_URL='https://fcgebmeefugxtaddpgvi.supabase.co';
 const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZjZ2VibWVlZnVneHRhZGRwZ3ZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyMzUxMTUsImV4cCI6MjA4NzgxMTExNX0.zcQfE9XnlIHqS2Atm5tTW_fVlmjX4MaaL6Y61tIXmyk';
 const sb=supabase.createClient(SUPA_URL,SUPA_KEY);
+let currentUserId=null;
 
 const next8=()=>Array.from({length:8},(_,i)=>{const d=new Date();d.setDate(d.getDate()+i);return d;});
 const dk=d=>d.getFullYear()+'-'+d.getMonth()+'-'+d.getDate();
@@ -454,10 +469,9 @@ window.addEventListener('online',()=>qFlush().catch(console.error));
 
 async function dbLoadTasks(){
   if(!navigator.onLine){
-    // Return cached data from localStorage if offline
     try{return JSON.parse(localStorage.getItem('taskbloc_tasks'))||{};}catch{return{};}
   }
-  const{data,error}=await sb.from('tasks').select('*').order('position');
+  const{data,error}=await sb.from('tasks').select('*').eq('user_id',currentUserId).order('position');
   if(error)throw error;
   const map={};(data||[]).forEach(r=>{if(!map[r.day_key])map[r.day_key]=[];map[r.day_key].push({id:r.id,name:r.name,status:r.status,context:r.context,complete:r.complete,attachments:r.attachments||[],tags:r.tags||[],due:r.due||'',estimate:r.estimate||'',recurring:r.recurring||false,recurringFrequency:r.recurring_frequency||''});});
   return map;
@@ -466,12 +480,12 @@ async function dbLoadForward(){
   if(!navigator.onLine){
     try{return JSON.parse(localStorage.getItem('taskbloc_forward'))||[];}catch{return[];}
   }
-  const{data,error}=await sb.from('forward_tasks').select('*').order('position');
+  const{data,error}=await sb.from('forward_tasks').select('*').eq('user_id',currentUserId).order('position');
   if(error)throw error;
   return(data||[]).map(r=>({id:r.id,name:r.name,status:r.status,context:r.context,complete:r.complete,attachments:r.attachments||[],tags:r.tags||[],due:r.due||'',estimate:r.estimate||'',recurring:r.recurring||false,recurringFrequency:r.recurring_frequency||''}));
 }
 async function dbUpsertTask(task,dayKey,position){
-  const data={id:task.id,day_key:dayKey,name:task.name,status:task.status,context:task.context,complete:task.complete,attachments:task.attachments,tags:task.tags||[],due:task.due||'',estimate:task.estimate||'',recurring:task.recurring||false,recurring_frequency:task.recurringFrequency||'',position};
+  const data={id:task.id,user_id:currentUserId,day_key:dayKey,name:task.name,status:task.status,context:task.context,complete:task.complete,attachments:task.attachments,tags:task.tags||[],due:task.due||'',estimate:task.estimate||'',recurring:task.recurring||false,recurring_frequency:task.recurringFrequency||'',position};
   if(!navigator.onLine){qAdd({type:'upsertTask',data});return;}
   try{await sb.from('tasks').upsert(data);}catch(e){qAdd({type:'upsertTask',data});throw e;}
 }
@@ -480,7 +494,7 @@ async function dbDeleteTask(id){
   try{await sb.from('tasks').delete().eq('id',id);}catch(e){qAdd({type:'deleteTask',id});throw e;}
 }
 async function dbUpsertForward(task,position){
-  const data={id:task.id,name:task.name,status:task.status,context:task.context,complete:task.complete,attachments:task.attachments,tags:task.tags||[],due:task.due||'',estimate:task.estimate||'',recurring:task.recurring||false,recurring_frequency:task.recurringFrequency||'',position};
+  const data={id:task.id,user_id:currentUserId,name:task.name,status:task.status,context:task.context,complete:task.complete,attachments:task.attachments,tags:task.tags||[],due:task.due||'',estimate:task.estimate||'',recurring:task.recurring||false,recurring_frequency:task.recurringFrequency||'',position};
   if(!navigator.onLine){qAdd({type:'upsertForward',data});return;}
   try{await sb.from('forward_tasks').upsert(data);}catch(e){qAdd({type:'upsertForward',data});throw e;}
 }
@@ -491,14 +505,14 @@ async function dbDeleteForward(id){
 
 async function dbLoadProjects(){
   if(!navigator.onLine){try{return JSON.parse(localStorage.getItem('taskbloc_projects'))||[];}catch{return[];}}
-  const{data,error}=await sb.from('projects').select('*').order('created_at');
+  const{data,error}=await sb.from('projects').select('*').eq('user_id',currentUserId).order('created_at');
   if(error)throw error;
   const list=(data||[]).map(r=>({id:r.id,name:r.name,color:r.color,archived:r.archived}));
   localStorage.setItem('taskbloc_projects',JSON.stringify(list));
   return list;
 }
 async function dbUpsertProject(project){
-  const data={id:project.id,name:project.name,color:project.color,archived:project.archived};
+  const data={id:project.id,user_id:currentUserId,name:project.name,color:project.color,archived:project.archived};
   if(!navigator.onLine){qAdd({type:'upsertProject',data});return;}
   try{await sb.from('projects').upsert(data);}catch(e){qAdd({type:'upsertProject',data});throw e;}
 }
@@ -1047,7 +1061,37 @@ function ProjectDetailModal({project,tasks,forward,projects,onClose,onOpenTask,o
   </div>);
 }
 
-function SettingsDrawer({onClose}){
+function LoginScreen(){
+  const [loading,setLoading]=useState(false);
+  const signIn=async()=>{
+    setLoading(true);
+    await sb.auth.signInWithOAuth({provider:'google',options:{redirectTo:'https://vasquezryanj-sudo.github.io/TaskBloc/'}});
+  };
+  return(
+    <div className="login-screen">
+      <div className="login-logo">TaskBloc</div>
+      <div className="login-tagline">your days, organized</div>
+      <div className="login-card">
+        <div className="login-card-title">Welcome back</div>
+        <div className="login-card-sub">Sign in to access your tasks across all your devices.</div>
+        <button className="login-google-btn" onClick={signIn} disabled={loading}>
+          <svg className="login-google-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+          </svg>
+          {loading?'Redirecting…':'Sign in with Google'}
+        </button>
+      </div>
+      <div className="login-footer" style={{marginTop:'24px'}}>
+        By signing in you agree to our <a href="https://www.withprovenance.org/products/taskbloc/privacy/" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.
+      </div>
+    </div>
+  );
+}
+
+function SettingsDrawer({onClose,user,onLogout}){
   const [showAbout,setShowAbout]=useState(false);
   return(<>
     <div className="settings-overlay" onClick={onClose}/>
@@ -1058,13 +1102,19 @@ function SettingsDrawer({onClose}){
         <button className="modal-close" onClick={onClose}>✕</button>
       </div>
       <div className="settings-section-label">Account</div>
+      {user&&<div className="settings-item" style={{cursor:'default'}}>
+        <div className="settings-item-left">
+          <div className="settings-item-label">{user.user_metadata?.full_name||user.email}</div>
+          <div className="settings-item-sub">{user.email}</div>
+        </div>
+      </div>}
       <div className="settings-item" style={{opacity:.55,cursor:'default'}}>
         <div className="settings-item-left"><div className="settings-item-label">Connect Google Calendar</div></div>
         <span className="settings-soon">Coming soon</span>
       </div>
-      <div className="settings-item" style={{opacity:.55,cursor:'default'}}>
-        <div className="settings-item-left"><div className="settings-item-label">Sign in with Google</div></div>
-        <span className="settings-soon">Coming soon</span>
+      <div className="settings-item" style={{cursor:'pointer'}} onClick={onLogout}>
+        <div className="settings-item-left"><div className="settings-item-label" style={{color:'var(--accent)'}}>Sign Out</div></div>
+        <span style={{fontSize:'14px',color:'var(--accent)'}}>→</span>
       </div>
       <div className="settings-divider"/>
       <div className="settings-section-label">Preferences</div>
@@ -1086,7 +1136,7 @@ function SettingsDrawer({onClose}){
         <div className="settings-item-left"><div className="settings-item-label">Send Feedback</div><div className="settings-item-sub">vasquezryanj@gmail.com</div></div>
         <span style={{fontSize:'14px',color:'var(--text3)'}}>→</span>
       </div></a>
-      <a href="https://www.withprovenance.org/taskbloc/taskbloc_privacy.html" target="_blank" rel="noopener noreferrer" style={{textDecoration:'none'}}><div className="settings-item" style={{cursor:'pointer'}}>
+      <a href="https://www.withprovenance.org/products/taskbloc/privacy/" target="_blank" rel="noopener noreferrer" style={{textDecoration:'none'}}><div className="settings-item" style={{cursor:'pointer'}}>
         <div className="settings-item-left"><div className="settings-item-label">Privacy Policy</div></div>
         <span style={{fontSize:'14px',color:'var(--text3)'}}>→</span>
       </div></a>
@@ -1129,6 +1179,8 @@ function ReadOnlyTaskModal({task,onClose,projects}){
 
 function App(){
   const days=next8();
+  const [session,setSession]=useState(undefined); // undefined=loading, null=no session, object=session
+  const [user,setUser]=useState(null);
   const [tasks,setTasks]=useState({});
   const [forward,setForward]=useState([]);
   const [sel,setSel]=useState(()=>{const t=new Date().toDateString();const i=days.findIndex(d=>d.toDateString()===t);return i>=0?i:0;});
@@ -1148,8 +1200,24 @@ function App(){
   const [addingForProject,setAddingForProject]=useState(null);
   const [showSettings,setShowSettings]=useState(false);
 
+  useEffect(()=>{
+    sb.auth.getSession().then(({data:{session:s}})=>{
+      currentUserId=s?.user?.id||null;
+      setSession(s||null);
+      setUser(s?.user||null);
+    });
+    const{data:{subscription}}=sb.auth.onAuthStateChange((_event,s)=>{
+      currentUserId=s?.user?.id||null;
+      setSession(s||null);
+      setUser(s?.user||null);
+    });
+    return()=>subscription.unsubscribe();
+  },[]);
+
+  const handleLogout=async()=>{await sb.auth.signOut();setShowSettings(false);};
+
   const fullSync=async()=>{setSyncStatus('syncing');try{const[t,f,p]=await Promise.all([dbLoadTasks(),dbLoadForward(),dbLoadProjects()]);setTasks(t);setForward(f);setProjects(p);setSyncStatus('ok');}catch(e){console.error(e);setSyncStatus('error');}};
-  useEffect(()=>{fullSync();},[]);
+  useEffect(()=>{if(session)fullSync();},[session]);
 
   const scheduleSave=(tasksObj,fwdArr)=>{
     if(saveTimer.current)clearTimeout(saveTimer.current);
@@ -1237,6 +1305,9 @@ function App(){
     </div>
   </div>);
 
+  if(session===undefined)return null; // still loading auth
+  if(!session)return <LoginScreen/>;
+
   return(<div className="app">
     <div className="sidebar">
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
@@ -1285,7 +1356,7 @@ function App(){
     {projectDetail&&<ProjectDetailModal project={projectDetail} tasks={tasks} forward={forward} projects={projects} onClose={()=>setProjectDetail(null)} onOpenTask={(t,readOnly)=>{if(readOnly){setReadOnlyTask(t);}else{if(t.dayKey==='forward')setEditFwd(t);else setEditing({task:t,dayKey:t.dayKey});}}} onAddTask={()=>{setAddingForProject({id:uid(),name:'',status:'',context:'',complete:false,attachments:[],tags:[projectDetail.name],due:'',estimate:'',recurring:false,recurringFrequency:''});}}/>}
     {readOnlyTask&&<ReadOnlyTaskModal task={readOnlyTask} onClose={()=>setReadOnlyTask(null)} projects={projects}/>}
     {addingForProject&&<TaskModal task={addingForProject} onClose={()=>setAddingForProject(null)} onSave={u=>{const todayKey=dk(new Date());setTasks(prev=>{const next={...prev,[todayKey]:[...(prev[todayKey]||[]),u]};scheduleSave(next,forward);return next;});setAddingForProject(null);}} onDelete={()=>setAddingForProject(null)} projects={projects} onCreateProject={createProject}/>}
-    {showSettings&&<SettingsDrawer onClose={()=>setShowSettings(false)}/>}
+    {showSettings&&<SettingsDrawer onClose={()=>setShowSettings(false)} user={user} onLogout={handleLogout}/>}
     {(addMediaModal||editMedia)&&<MediaEntryModal entry={editMedia||{}} onClose={()=>{setAddMediaModal(false);setEditMedia(null);}} onSave={item=>{editMedia?updateMedia(item):addMedia(item);setAddMediaModal(false);setEditMedia(null);}} onDelete={editMedia?()=>{removeMedia(editMedia.id);setEditMedia(null);}:undefined}/>}
   </div>);
 }
