@@ -923,14 +923,29 @@ function ProjectCard({project,incomplete,complete,onArchive,onOpen,onProjectClic
   </div>);
 }
 
-function ProjectsView({projects,tasks,forward,onArchive,onOpen,onProjectClick}){
+function ProjectsView({projects,tasks,forward,onArchive,onOpen,onProjectClick,onCreateProject}){
   const active=projects.filter(p=>!p.archived);
   const allTasks=[];
   Object.entries(tasks).forEach(([dayKey,ts])=>{ts.forEach(t=>allTasks.push({...t,dayKey}));});
   forward.forEach(t=>allTasks.push({...t,dayKey:'forward'}));
+  const [adding,setAdding]=useState(false);
+  const [newName,setNewName]=useState('');
+  const [newColor,setNewColor]=useState(TAG_COLORS[0]);
+  const handleCreate=()=>{if(!newName.trim())return;onCreateProject({id:uid(),name:newName.trim(),color:newColor,archived:false});setNewName('');setNewColor(TAG_COLORS[0]);setAdding(false);};
   return(<div style={{display:'flex',flexDirection:'column',gap:'20px'}}>
-    <div style={{fontFamily:"'Fraunces',serif",fontWeight:700,fontSize:'24px',color:'var(--text)',letterSpacing:'-0.3px'}}>Projects</div>
-    {active.length===0&&<div style={{textAlign:'center',padding:'24px 10px'}}><div style={{fontFamily:"'Fraunces',serif",fontSize:'15px',color:'var(--text3)',fontStyle:'italic',lineHeight:'1.6'}}>No projects yet.</div><div style={{fontSize:'11px',color:'var(--text3)',marginTop:'4px'}}>Tag a task with a new project to get started.</div></div>}
+    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+      <div style={{fontFamily:"'Fraunces',serif",fontWeight:700,fontSize:'24px',color:'var(--text)',letterSpacing:'-0.3px'}}>Projects</div>
+      <button className="btn primary" onClick={()=>setAdding(true)} style={{fontSize:'12px',padding:'6px 14px'}}>+ New Project</button>
+    </div>
+    {adding&&<div style={{background:'var(--surface)',border:'1.5px solid var(--accent)',borderRadius:'14px',padding:'16px 18px',display:'flex',flexDirection:'column',gap:'12px',boxShadow:'0 2px 8px var(--shadow)'}}>
+      <input value={newName} onChange={e=>setNewName(e.target.value)} placeholder="Project name" autoFocus onKeyDown={e=>{if(e.key==='Enter')handleCreate();if(e.key==='Escape')setAdding(false);}} style={{border:'1.5px solid var(--border)',borderRadius:'10px',padding:'10px 12px',fontSize:'13px',fontFamily:'inherit',background:'var(--surface2)',outline:'none',width:'100%',boxSizing:'border-box'}}/>
+      <div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>{TAG_COLORS.map(c=><div key={c} onClick={()=>setNewColor(c)} style={{width:'24px',height:'24px',borderRadius:'50%',background:c,cursor:'pointer',border:newColor===c?'2.5px solid var(--text)':'2.5px solid transparent',transition:'border .15s'}}/>)}</div>
+      <div style={{display:'flex',gap:'8px',justifyContent:'flex-end'}}>
+        <button className="btn" onClick={()=>{setAdding(false);setNewName('');}} style={{fontSize:'12px'}}>Cancel</button>
+        <button className="btn primary" onClick={handleCreate} style={{fontSize:'12px'}}>Create</button>
+      </div>
+    </div>}
+    {active.length===0&&!adding&&<div style={{textAlign:'center',padding:'24px 10px'}}><div style={{fontFamily:"'Fraunces',serif",fontSize:'15px',color:'var(--text3)',fontStyle:'italic',lineHeight:'1.6'}}>No projects yet.</div><div style={{fontSize:'11px',color:'var(--text3)',marginTop:'4px'}}>Tap "+ New Project" to get started.</div></div>}
     {active.map(p=>{
       const tagged=allTasks.filter(t=>(t.tags||[]).map(tagName).includes(p.name));
       const incomplete=tagged.filter(t=>!t.complete);
@@ -1336,7 +1351,7 @@ function App(){
         <LookingForward items={forward} onDrop={moveToFwd} onRemove={remFwd} onOpen={t=>setEditFwd(t)} onAdd={addFwd} onToggle={toggleFwd}/>
       </>}
       {mobTab==='forward'&&<LookingForward items={forward} onDrop={moveToFwd} onRemove={remFwd} onOpen={t=>setEditFwd(t)} onAdd={addFwd} onToggle={toggleFwd}/>}
-      {mobTab==='projects'&&<ProjectsView projects={projects} tasks={tasks} forward={forward} onArchive={archiveProject} onOpen={t=>{if(t.dayKey==='forward')setEditFwd(t);else setEditing({task:t,dayKey:t.dayKey});}} onProjectClick={p=>setProjectDetail(p)}/>}
+      {mobTab==='projects'&&<ProjectsView projects={projects} tasks={tasks} forward={forward} onArchive={archiveProject} onOpen={t=>{if(t.dayKey==='forward')setEditFwd(t);else setEditing({task:t,dayKey:t.dayKey});}} onProjectClick={p=>setProjectDetail(p)} onCreateProject={createProject}/>}
       {mobTab==='summary'&&<WeeklySummary tasks={tasks} projects={projects} onOpenTask={(t,k)=>setEditing({task:t,dayKey:k})}/>}
       {mobTab==='reading'&&(!showAllCompleted
         ?<MediaPage items={mediaItems} onAdd={()=>setAddMediaModal(true)} onEdit={setEditMedia} onRemove={removeMedia} onToggleComplete={toggleMediaComplete} onUpdateQuotes={updateMediaQuotes} onViewAll={()=>setShowAllCompleted(true)}/>
