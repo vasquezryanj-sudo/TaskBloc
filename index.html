@@ -204,12 +204,12 @@ body{background-image:radial-gradient(ellipse at 15% 80%,rgba(192,72,32,0.04) 0%
 .rollover-footer{display:flex;justify-content:flex-end;gap:8px;padding-top:8px;border-top:1px solid var(--border);}
 
 /* ATTACHMENTS */
-.file-drop{border:2px dashed var(--border2);border-radius:12px;padding:20px;text-align:center;cursor:pointer;transition:all .25s cubic-bezier(.4,0,.2,1);background:var(--surface2);position:relative;}
+.file-drop{border:2px dashed var(--border2);border-radius:10px;padding:10px 14px;text-align:center;cursor:pointer;transition:all .25s cubic-bezier(.4,0,.2,1);background:var(--surface2);position:relative;display:flex;align-items:center;justify-content:center;gap:8px;}
 .file-drop:hover,.file-drop.over{border-color:var(--accent);background:var(--accent-light);border-style:solid;}
 .file-drop input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
-.file-drop-icon{font-size:20px;margin-bottom:4px;}
-.file-drop-label{font-size:12px;font-weight:600;color:var(--text2);}
-.file-drop-sub{font-size:10px;color:var(--text3);margin-top:2px;font-style:italic;}
+.file-drop-icon{font-size:14px;line-height:1;}
+.file-drop-label{font-size:11px;font-weight:600;color:var(--text2);line-height:1;}
+.file-drop-sub{font-size:10px;color:var(--text3);font-style:italic;line-height:1;}
 .link-row{display:flex;gap:7px;}
 .attach-list{display:flex;flex-direction:column;gap:5px;}
 .attach-item{display:flex;align-items:center;gap:9px;background:var(--surface2);border:1.5px solid var(--border);border-radius:9px;padding:8px 11px;transition:all .12s;}
@@ -542,7 +542,7 @@ function Attachments({attachments,onChange}){
   const remove=id=>onChange(attachments.filter(a=>a.id!==id));
   return(<div style={{display:'flex',flexDirection:'column',gap:'9px'}}>
     <div className={'file-drop'+(over?' over':'')} onDragOver={e=>{e.preventDefault();setOver(true);}} onDragLeave={()=>setOver(false)} onDrop={e=>{e.preventDefault();setOver(false);addFiles(e.dataTransfer.files);}}>
-      <input type="file" multiple onChange={e=>addFiles(e.target.files)}/><div className="file-drop-icon">📁</div><div className="file-drop-label">Drop files or tap to browse</div><div className="file-drop-sub">Syncs once storage connected</div>
+      <input type="file" multiple onChange={e=>addFiles(e.target.files)}/><span className="file-drop-icon">📁</span><span className="file-drop-label">Drop files or tap to browse</span><span className="file-drop-sub">· Syncs once storage connected</span>
     </div>
     {attachments.length>0&&<div className="attach-list">{attachments.map(a=>{const{icon,cls}=fIcon(a.name);return(<div key={a.id} className="attach-item"><div className={'a-icon '+cls}>{icon}</div><div className="a-info"><div className="a-name">{a.name}</div><div className="a-meta">{fmtSize(a.size)+' · pending'}</div></div><button className="a-remove" onClick={()=>remove(a.id)}>✕</button></div>);})}</div>}
   </div>);
