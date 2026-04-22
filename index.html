@@ -1162,7 +1162,7 @@ const TIME_OPTS_END=(()=>{const o=[];for(let h=6;h<=22;h++)for(let m=0;m<60;m+=3
 const tzShort=tz=>{const map={'America/New_York':'New York','America/Chicago':'Chicago','America/Denver':'Denver','America/Los_Angeles':'Los Angeles','America/Anchorage':'Anchorage','Pacific/Honolulu':'Honolulu'};return map[tz]||tz.split('/').pop().replace(/_/g,' ');};
 const minsToLabel=m=>{const h=Math.floor(m/60);const mm=m%60;const hh=h>12?h-12:h===0?12:h;const ap=h>=12?'pm':'am';return `${hh}:${String(mm).padStart(2,'0')}${ap}`;};
 
-function SchedulingPrefsPanel({user}){
+function SchedulingPrefsPanel({user,onSaved}){
   const [start,setStart]=useState(720);
   const [end,setEnd]=useState(1020);
   const [tz,setTz]=useState('America/New_York');
@@ -1181,7 +1181,7 @@ function SchedulingPrefsPanel({user}){
     setSaving(true);setSaved(false);
     const{error}=await sb.from('user_preferences').upsert({user_id:user.id,scheduling_start:Number(start),scheduling_end:Number(end),timezone:String(tz)},{onConflict:'user_id'});
     setSaving(false);
-    if(!error){setSaved(true);setTimeout(()=>setSaved(false),2000);}
+    if(!error){setSaved(true);setTimeout(()=>setSaved(false),2000);if(onSaved)onSaved();}
   };
   if(!loaded)return null;
   return(<div className="sched-panel">
@@ -1197,7 +1197,7 @@ function SchedulingPrefsPanel({user}){
   </div>);
 }
 
-function SettingsDrawer({onClose,user,onLogout,calConnected,onConnectCal,onDisconnectCal,schedPrefs}){
+function SettingsDrawer({onClose,user,onLogout,calConnected,onConnectCal,onDisconnectCal,schedPrefs,onSchedSaved}){
   const [showAbout,setShowAbout]=useState(false);
   const [showSched,setShowSched]=useState(false);
   return(<>
@@ -1236,7 +1236,7 @@ function SettingsDrawer({onClose,user,onLogout,calConnected,onConnectCal,onDisco
         <div className="settings-item-left"><div className="settings-item-label">Scheduling Window</div><div className="settings-item-sub">{schedPrefs?`${minsToLabel(schedPrefs.scheduling_start)} – ${minsToLabel(schedPrefs.scheduling_end)} · ${tzShort(schedPrefs.timezone)}`:'12:00pm – 5:00pm · New York'}</div></div>
         <span style={{fontSize:'14px',color:'var(--text3)'}}>{showSched?'▲':'▼'}</span>
       </div>
-      {showSched&&<SchedulingPrefsPanel user={user}/>}
+      {showSched&&<SchedulingPrefsPanel user={user} onSaved={onSchedSaved}/>}
       <div className="settings-item" style={{opacity:.55,cursor:'default'}}>
         <div className="settings-item-left"><div className="settings-item-label">Dark Mode</div></div>
         <div style={{display:'flex',alignItems:'center',gap:'8px'}}><span className="settings-soon">Coming soon</span><div className="settings-toggle"/></div>
@@ -1570,7 +1570,7 @@ function App(){
     {projectDetail&&<ProjectDetailModal project={projectDetail} tasks={tasks} forward={forward} projects={projects} onClose={()=>setProjectDetail(null)} onOpenTask={(t,readOnly)=>{if(readOnly){setReadOnlyTask(t);}else{if(t.dayKey==='forward')setEditFwd(t);else setEditing({task:t,dayKey:t.dayKey});}}} onAddTask={()=>{setAddingForProject({id:uid(),name:'',status:'',context:'',complete:false,attachments:[],tags:[projectDetail.name],due:'',estimate:'',recurring:false,recurringFrequency:''});}}/>}
     {readOnlyTask&&<ReadOnlyTaskModal task={readOnlyTask} onClose={()=>setReadOnlyTask(null)} projects={projects}/>}
     {addingForProject&&<TaskModal task={addingForProject} onClose={()=>setAddingForProject(null)} onSave={u=>{const todayKey=dk(new Date());setTasks(prev=>{const next={...prev,[todayKey]:[...(prev[todayKey]||[]),u]};scheduleSave(next,forward);return next;});setAddingForProject(null);}} onDelete={()=>setAddingForProject(null)} projects={projects} onCreateProject={createProject}/>}
-    {showSettings&&<SettingsDrawer onClose={()=>setShowSettings(false)} user={user} onLogout={handleLogout} calConnected={calConnected} onConnectCal={connectCal} onDisconnectCal={disconnectCal} schedPrefs={schedPrefs}/>}
+    {showSettings&&<SettingsDrawer onClose={()=>setShowSettings(false)} user={user} onLogout={handleLogout} calConnected={calConnected} onConnectCal={connectCal} onDisconnectCal={disconnectCal} schedPrefs={schedPrefs} onSchedSaved={()=>user&&loadSchedPrefs(user.id)}/>}
     {(addMediaModal||editMedia)&&<MediaEntryModal entry={editMedia||{}} onClose={()=>{setAddMediaModal(false);setEditMedia(null);}} onSave={item=>{editMedia?updateMedia(item):addMedia(item);setAddMediaModal(false);setEditMedia(null);}} onDelete={editMedia?()=>{removeMedia(editMedia.id);setEditMedia(null);}:undefined}/>}
     {rolloverTasks.length>0&&<RolloverModal tasks={rolloverTasks} onComplete={rolloverComplete} onDelete={rolloverDelete} onKeep={id=>setRolloverTasks(prev=>prev.filter(t=>t.id!==id))} onKeepAll={rolloverKeepAll}/>}
   </div>);
