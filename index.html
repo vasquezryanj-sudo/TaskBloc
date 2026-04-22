@@ -1167,6 +1167,7 @@ function SchedulingPrefsPanel({user}){
   const [end,setEnd]=useState(1020);
   const [tz,setTz]=useState('America/New_York');
   const [saving,setSaving]=useState(false);
+  const [saved,setSaved]=useState(false);
   const [loaded,setLoaded]=useState(false);
   useEffect(()=>{
     if(!user)return;
@@ -1177,9 +1178,10 @@ function SchedulingPrefsPanel({user}){
   },[user]);
   const save=async()=>{
     if(!user)return;
-    setSaving(true);
-    await sb.from('user_preferences').upsert({user_id:user.id,scheduling_start:start,scheduling_end:end,timezone:tz},{onConflict:'user_id'});
+    setSaving(true);setSaved(false);
+    const{error}=await sb.from('user_preferences').upsert({user_id:user.id,scheduling_start:Number(start),scheduling_end:Number(end),timezone:String(tz)},{onConflict:'user_id'});
     setSaving(false);
+    if(!error){setSaved(true);setTimeout(()=>setSaved(false),2000);}
   };
   if(!loaded)return null;
   return(<div className="sched-panel">
@@ -1191,7 +1193,7 @@ function SchedulingPrefsPanel({user}){
       <optgroup label="US Timezones">{US_TZ.map(t=><option key={t} value={t}>{tzShort(t)}</option>)}</optgroup>
       <optgroup label="All Timezones">{ALL_TZ.map(t=><option key={t} value={t}>{t}</option>)}</optgroup>
     </select></div>
-    <button className="btn primary sched-save" onClick={save} disabled={saving}>{saving?'Saving…':'Save Preferences'}</button>
+    <button className="btn primary sched-save" onClick={save} disabled={saving||saved}>{saving?'Saving…':saved?'Saved ✓':'Save Preferences'}</button>
   </div>);
 }
 
