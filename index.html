@@ -692,6 +692,7 @@ function TaskItem({task,onToggle,onOpen,onDragStart,onDragEnd,onDragOver,onDrop,
 function DayBlock({date,tasks,isToday,onAdd,onToggle,onOpen,onUpdateTasks,onMoveTask,onMoveFromForward,projects}){
   const [newName,setNewName]=useState('');const [dragOver,setDragOver]=useState(null);const [draggingId,setDraggingId]=useState(null);const [zoneActive,setZoneActive]=useState(false);
   const key=dk(date);
+  useEffect(()=>{setDraggingId(null);setDragOver(null);},[tasks]);
   const hDragStart=(e,id)=>{setDraggingId(id);e.dataTransfer.setData('taskId',id);e.dataTransfer.setData('fromDay',key);};
   const hDragEnd=()=>{setDraggingId(null);setDragOver(null);};
   const hDrop=tid=>{if(!draggingId||draggingId===tid){setDraggingId(null);setDragOver(null);return;}const fi=tasks.findIndex(t=>t.id===draggingId),ti=tasks.findIndex(t=>t.id===tid);if(fi===-1||ti===-1)return;const arr=[...tasks];const[m]=arr.splice(fi,1);arr.splice(ti,0,m);onUpdateTasks(key,arr);setDraggingId(null);setDragOver(null);};
