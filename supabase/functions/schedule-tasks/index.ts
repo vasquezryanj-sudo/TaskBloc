@@ -2,7 +2,6 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const GOOGLE_REFRESH_TOKEN = Deno.env.get("GOOGLE_REFRESH_TOKEN")!;
 const GOOGLE_CLIENT_ID = Deno.env.get("GOOGLE_CLIENT_ID")!;
 const GOOGLE_CLIENT_SECRET = Deno.env.get("GOOGLE_CLIENT_SECRET")!;
 
@@ -38,24 +37,42 @@ function todayISO(tz: string): string {
   return `${y}-${m}-${d}`;
 }
 
-async function getAccessToken(): Promise<string> {
+function yesterdayKey(tz: string): string {
+  const now = new Date();
+  now.setDate(now.getDate() - 1);
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+  }).formatToParts(now);
+  const y = parts.find((p) => p.type === "year")!.value;
+  const m = String(Number(parts.find((p) => p.type === "month")!.value) - 1);
+  const d = parts.find((p) => p.type === "day")!.value;
+  return `${y}-${m}-${d}`;
+}
+
+async function getAccessTokenForUser(refreshToken: string): Promise<string> {
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       client_id: GOOGLE_CLIENT_ID,
       client_secret: GOOGLE_CLIENT_SECRET,
-      refresh_token: GOOGLE_REFRESH_TOKEN,
+      refresh_token: refreshToken,
       grant_type: "refresh_token",
     }),
   });
-  if (!res.ok) throw new Error(`Token refresh failed: ${res.status}`);
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Token refresh failed (${res.status}): ${body}`);
+  }
   const data = await res.json();
   return data.access_token;
 }
 
 interface TimeBlock {
-  start: number; // minutes from midnight
+  start: number;
   end: number;
 }
 
@@ -94,7 +111,7 @@ function findFreeGaps(busy: TimeBlock[], dayStart: number, dayEnd: number): Time
   return gaps;
 }
 
-function minutesToISO(dateStr: string, minutes: number, tz: string): string {
+function minutesToISO(dateStr: string, minutes: number, _tz: string): string {
   const h = String(Math.floor(minutes / 60)).padStart(2, "0");
   const m = String(minutes % 60).padStart(2, "0");
   return `${dateStr}T${h}:${m}:00`;
@@ -107,29 +124,130 @@ function timeToMins(est: string): number {
   return isNaN(n) || n <= 0 ? 30 : n;
 }
 
-// ── Main handler ──
+// ── Schedule tasks for a single user ──
 
-function yesterdayKey(tz: string): string {
-  const now = new Date();
-  now.setDate(now.getDate() - 1);
-  const parts = new Intl.DateTimeFormat("en-US", {
+async function scheduleForUser(
+  userId: string,
+  accessToken: string,
+  dayKey: string,
+  dateStr: string,
+  tz: string,
+): Promise<{ scheduled: string[]; error?: string }> {
+  const DAY_START = 12 * 60;
+  const DAY_END = 17 * 60;
+
+  // Fetch user's incomplete tasks for today
+  const { data: tasks, error: taskErr } = await sb
+    .from("tasks")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("day_key", dayKey)
+    .eq("complete", false)
+    .order("position", { ascending: true });
+
+  if (taskErr) throw taskErr;
+  if (!tasks || tasks.length === 0) return { scheduled: [] };
+
+  // Fetch today's calendar events (12pm–5pm)
+  const timeMin = `${dateStr}T12:00:00`;
+  const timeMax = `${dateStr}T17:00:00`;
+  const calParams = new URLSearchParams({
+    timeMin: new Date(timeMin).toISOString(),
+    timeMax: new Date(timeMax).toISOString(),
+    singleEvents: "true",
+    orderBy: "startTime",
     timeZone: tz,
-    year: "numeric",
-    month: "numeric",
-    day: "numeric",
-  }).formatToParts(now);
-  const y = parts.find((p) => p.type === "year")!.value;
-  const m = String(Number(parts.find((p) => p.type === "month")!.value) - 1);
-  const d = parts.find((p) => p.type === "day")!.value;
-  return `${y}-${m}-${d}`;
+  });
+  const calRes = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/primary/events?${calParams}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  if (!calRes.ok) throw new Error(`Calendar fetch failed: ${calRes.status}`);
+  const calData = await calRes.json();
+
+  // Build busy blocks
+  const busy: TimeBlock[] = (calData.items || [])
+    .filter((e: any) => e.start?.dateTime && e.end?.dateTime)
+    .map((e: any) => ({
+      start: parseMinutes(e.start.dateTime, tz),
+      end: parseMinutes(e.end.dateTime, tz),
+    }));
+
+  const existingTitles = new Set(
+    (calData.items || []).map((e: any) => e.summary?.trim().toLowerCase()),
+  );
+
+  const gaps = findFreeGaps(busy, DAY_START, DAY_END);
+
+  let gapIdx = 0;
+  let cursor = gaps.length > 0 ? gaps[0].start : DAY_START;
+  const created: string[] = [];
+
+  for (const task of tasks) {
+    if (existingTitles.has(task.name?.trim().toLowerCase())) continue;
+
+    const duration = task.estimate ? timeToMins(task.estimate) : 30;
+    if (isNaN(duration) || duration <= 0) continue;
+
+    while (gapIdx < gaps.length) {
+      if (cursor + duration <= gaps[gapIdx].end) break;
+      gapIdx++;
+      if (gapIdx < gaps.length) cursor = gaps[gapIdx].start;
+    }
+    if (gapIdx >= gaps.length) break;
+
+    const startTime = minutesToISO(dateStr, cursor, tz);
+    const endTime = minutesToISO(dateStr, cursor + duration, tz);
+
+    const descLines: string[] = [];
+    if (task.status) descLines.push(`Status: ${task.status}`);
+    if (task.due) descLines.push(`Due: ${task.due}`);
+    if (task.estimate) descLines.push(`Estimate: ${task.estimate}`);
+    if (task.tags && task.tags.length > 0) descLines.push(`Tags: ${task.tags.join(", ")}`);
+    if (task.context) descLines.push(`Notes: ${task.context}`);
+    if (task.attachments && task.attachments.length > 0)
+      descLines.push(`Attachments: ${task.attachments.map((a: any) => a.name || a.url || a).join(", ")}`);
+    descLines.push("", "Auto-scheduled by TaskBloc");
+
+    const eventBody = {
+      summary: task.name,
+      description: descLines.join("\n"),
+      colorId: "6",
+      start: { dateTime: startTime, timeZone: tz },
+      end: { dateTime: endTime, timeZone: tz },
+    };
+
+    const createRes = await fetch(
+      "https://www.googleapis.com/calendar/v3/calendars/primary/events",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(eventBody),
+      },
+    );
+    if (!createRes.ok) {
+      console.error(`[user=${userId}] Failed to create event for "${task.name}": ${createRes.status}`);
+      continue;
+    }
+
+    created.push(task.name);
+    cursor += duration;
+  }
+
+  return { scheduled: created };
 }
+
+// ── Main handler ──
 
 Deno.serve(async (req) => {
   try {
     const url = new URL(req.url);
     const action = url.searchParams.get("action");
 
-    const tz = "America/New_York"; // user's local timezone
+    const tz = "America/New_York";
     const dayKey = todayKey(tz);
 
     // ── Nightly rollover: move yesterday's incomplete tasks to today ──
@@ -149,7 +267,6 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Get count of existing tasks for today to set position
       const { data: existingToday } = await sb.from("tasks").select("id").eq("day_key", dayKey);
       let pos = existingToday ? existingToday.length : 0;
 
@@ -168,16 +285,12 @@ Deno.serve(async (req) => {
 
       return new Response(
         JSON.stringify({ rolledOver: rolledOver.length, tasks: rolledOver, from: yKey, to: dayKey }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
+        { status: 200, headers: { "Content-Type": "application/json" } },
       );
     }
 
-    // ── Schedule tasks flow ──
-    const dateStr = todayISO(tz);
-    const DAY_START = 12 * 60; // 12pm
-    const DAY_END = 17 * 60; // 5pm
-
     // ── Recurring task rollover ──
+    const dateStr = todayISO(tz);
     const yKey = yesterdayKey(tz);
     const { data: recurringTasks } = await sb
       .from("tasks")
@@ -188,7 +301,6 @@ Deno.serve(async (req) => {
 
     const recurringCreated: string[] = [];
     if (recurringTasks && recurringTasks.length > 0) {
-      // Get count of existing tasks for today to set position
       const { data: existingToday } = await sb.from("tasks").select("id").eq("day_key", dayKey);
       let pos = existingToday ? existingToday.length : 0;
       for (const rt of recurringTasks) {
@@ -206,6 +318,7 @@ Deno.serve(async (req) => {
           recurring: true,
           recurring_frequency: rt.recurring_frequency || "",
           position: pos++,
+          user_id: rt.user_id,
         };
         await sb.from("tasks").insert(newTask);
         recurringCreated.push(rt.name);
@@ -213,8 +326,6 @@ Deno.serve(async (req) => {
     }
 
     // ── Monday weekly reset ──
-    // Only delete completed daily tasks from `tasks` table.
-    // NEVER touch forward_tasks or next_week tables.
     const nowLocal = new Date().toLocaleString("en-US", { timeZone: tz });
     const localDate = new Date(nowLocal);
     if (localDate.getDay() === 1) {
@@ -228,119 +339,29 @@ Deno.serve(async (req) => {
       await sb.from("settings").upsert({ key: "week_cleared", value: new Date().toISOString() });
     }
 
-    // 1. Fetch today's incomplete tasks
-    const { data: tasks, error: taskErr } = await sb
-      .from("tasks")
-      .select("*")
-      .eq("day_key", dayKey)
-      .eq("complete", false)
-      .order("position", { ascending: true });
-
-    if (taskErr) throw taskErr;
-    console.log(`[debug] day_key="${dayKey}", tasks found=${tasks?.length ?? 0}`);
-    if (!tasks || tasks.length === 0) {
-      return new Response(JSON.stringify({ message: "No tasks for today", day_key: dayKey }), { status: 200 });
+    // ── Per-user calendar scheduling ──
+    const { data: calUsers, error: calErr } = await sb.from("user_calendars").select("*");
+    if (calErr) {
+      console.error("Failed to load user_calendars:", calErr);
+      return new Response(JSON.stringify({ error: "Failed to load user_calendars" }), { status: 500 });
     }
 
-    // 2. Get Google access token
-    const accessToken = await getAccessToken();
-
-    // 3. Fetch today's calendar events (12pm–5pm)
-    const timeMin = `${dateStr}T12:00:00`;
-    const timeMax = `${dateStr}T17:00:00`;
-    const calParams = new URLSearchParams({
-      timeMin: new Date(`${timeMin}`).toISOString(),
-      timeMax: new Date(`${timeMax}`).toISOString(),
-      singleEvents: "true",
-      orderBy: "startTime",
-      timeZone: tz,
-    });
-    const calRes = await fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/primary/events?${calParams}`,
-      { headers: { Authorization: `Bearer ${accessToken}` } }
-    );
-    if (!calRes.ok) throw new Error(`Calendar fetch failed: ${calRes.status}`);
-    const calData = await calRes.json();
-
-    // 4. Build busy blocks
-    const busy: TimeBlock[] = (calData.items || [])
-      .filter((e: any) => e.start?.dateTime && e.end?.dateTime)
-      .map((e: any) => ({
-        start: parseMinutes(e.start.dateTime, tz),
-        end: parseMinutes(e.end.dateTime, tz),
-      }));
-
-    // Collect existing event titles to avoid duplicates
-    const existingTitles = new Set(
-      (calData.items || []).map((e: any) => e.summary?.trim().toLowerCase())
-    );
-
-    // 5. Find free gaps
-    const gaps = findFreeGaps(busy, DAY_START, DAY_END);
-
-    // 6. Schedule tasks into free gaps
-    let gapIdx = 0;
-    let cursor = gaps.length > 0 ? gaps[0].start : DAY_START;
-    const created: string[] = [];
-
-    for (const task of tasks) {
-      // Skip if a calendar event with this title already exists
-      if (existingTitles.has(task.name?.trim().toLowerCase())) continue;
-
-      const duration = task.estimate ? timeToMins(task.estimate) : 30;
-      if (isNaN(duration) || duration <= 0) continue;
-
-      // Advance to a gap that can fit this task
-      while (gapIdx < gaps.length) {
-        if (cursor + duration <= gaps[gapIdx].end) break;
-        gapIdx++;
-        if (gapIdx < gaps.length) cursor = gaps[gapIdx].start;
+    const results: Record<string, any> = {};
+    for (const calUser of calUsers || []) {
+      try {
+        const accessToken = await getAccessTokenForUser(calUser.refresh_token);
+        const result = await scheduleForUser(calUser.user_id, accessToken, dayKey, dateStr, tz);
+        results[calUser.user_id] = { scheduled: result.scheduled.length, tasks: result.scheduled };
+        console.log(`[user=${calUser.user_id}] Scheduled ${result.scheduled.length} tasks`);
+      } catch (err) {
+        console.error(`[user=${calUser.user_id}] Error:`, err);
+        results[calUser.user_id] = { error: String(err) };
       }
-      if (gapIdx >= gaps.length) break; // no more room
-
-      const startTime = minutesToISO(dateStr, cursor, tz);
-      const endTime = minutesToISO(dateStr, cursor + duration, tz);
-
-      const descLines: string[] = [];
-      if (task.status) descLines.push(`Status: ${task.status}`);
-      if (task.due) descLines.push(`Due: ${task.due}`);
-      if (task.estimate) descLines.push(`Estimate: ${task.estimate}`);
-      if (task.tags && task.tags.length > 0) descLines.push(`Tags: ${task.tags.join(", ")}`);
-      if (task.context) descLines.push(`Notes: ${task.context}`);
-      if (task.attachments && task.attachments.length > 0) descLines.push(`Attachments: ${task.attachments.map((a: any) => a.name || a.url || a).join(", ")}`);
-      descLines.push("", "Auto-scheduled by TaskBloc");
-
-      const eventBody = {
-        summary: task.name,
-        description: descLines.join("\n"),
-        colorId: "6",
-        start: { dateTime: startTime, timeZone: tz },
-        end: { dateTime: endTime, timeZone: tz },
-      };
-
-      const createRes = await fetch(
-        "https://www.googleapis.com/calendar/v3/calendars/primary/events",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(eventBody),
-        }
-      );
-      if (!createRes.ok) {
-        console.error(`Failed to create event for "${task.name}": ${createRes.status}`);
-        continue;
-      }
-
-      created.push(task.name);
-      cursor += duration;
     }
 
     return new Response(
-      JSON.stringify({ scheduled: created.length, tasks: created, recurringCreated: recurringCreated.length, recurringTasks: recurringCreated }),
-      { status: 200, headers: { "Content-Type": "application/json" } }
+      JSON.stringify({ users: results, recurringCreated: recurringCreated.length, recurringTasks: recurringCreated }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
     );
   } catch (err) {
     console.error(err);

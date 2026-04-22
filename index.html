@@ -1148,7 +1148,7 @@ function LoginScreen(){
   );
 }
 
-function SettingsDrawer({onClose,user,onLogout}){
+function SettingsDrawer({onClose,user,onLogout,calConnected,onConnectCal,onDisconnectCal}){
   const [showAbout,setShowAbout]=useState(false);
   return(<>
     <div className="settings-overlay" onClick={onClose}/>
@@ -1165,10 +1165,17 @@ function SettingsDrawer({onClose,user,onLogout}){
           <div className="settings-item-sub">{user.email}</div>
         </div>
       </div>}
-      <div className="settings-item" style={{opacity:.55,cursor:'default'}}>
-        <div className="settings-item-left"><div className="settings-item-label">Connect Google Calendar</div></div>
-        <span className="settings-soon">Coming soon</span>
-      </div>
+      {calConnected?
+        <div className="settings-item" style={{cursor:'pointer'}} onClick={onDisconnectCal}>
+          <div className="settings-item-left"><div className="settings-item-label">Google Calendar</div><div className="settings-item-sub" style={{color:'var(--accent2)'}}>Connected</div></div>
+          <span style={{fontSize:'11px',color:'var(--accent)',fontWeight:600}}>Disconnect</span>
+        </div>
+      :
+        <div className="settings-item" style={{cursor:'pointer'}} onClick={onConnectCal}>
+          <div className="settings-item-left"><div className="settings-item-label">Connect Google Calendar</div></div>
+          <span style={{fontSize:'14px',color:'var(--accent)'}}>→</span>
+        </div>
+      }
       <div className="settings-item" style={{cursor:'pointer'}} onClick={onLogout}>
         <div className="settings-item-left"><div className="settings-item-label" style={{color:'var(--accent)'}}>Sign Out</div></div>
         <span style={{fontSize:'14px',color:'var(--accent)'}}>→</span>
@@ -1253,22 +1260,57 @@ function App(){
   const [addingForProject,setAddingForProject]=useState(null);
   const [showSettings,setShowSettings]=useState(false);
   const [rolloverTasks,setRolloverTasks]=useState([]);
+  const [calConnected,setCalConnected]=useState(false);
+
+  // Check if user has calendar connected
+  const checkCalConnection=async(userId)=>{
+    const{data}=await sb.from('user_calendars').select('id').eq('user_id',userId).maybeSingle();
+    setCalConnected(!!data);
+  };
+
+  // Save provider refresh token after OAuth redirect
+  const saveCalTokenIfNeeded=async(s)=>{
+    if(!s?.provider_refresh_token||!s?.user?.id)return;
+    const{data:existing}=await sb.from('user_calendars').select('id').eq('user_id',s.user.id).maybeSingle();
+    if(!existing){
+      await sb.from('user_calendars').upsert({user_id:s.user.id,refresh_token:s.provider_refresh_token},{onConflict:'user_id'});
+    }
+    setCalConnected(true);
+  };
 
   useEffect(()=>{
     sb.auth.getSession().then(({data:{session:s}})=>{
       currentUserId=s?.user?.id||null;
       setSession(s||null);
       setUser(s?.user||null);
+      if(s?.user?.id)checkCalConnection(s.user.id);
+      saveCalTokenIfNeeded(s);
     });
     const{data:{subscription}}=sb.auth.onAuthStateChange((_event,s)=>{
       currentUserId=s?.user?.id||null;
       setSession(s||null);
       setUser(s?.user||null);
+      if(s?.user?.id)checkCalConnection(s.user.id);
+      if(_event==='SIGNED_IN')saveCalTokenIfNeeded(s);
     });
     return()=>subscription.unsubscribe();
   },[]);
 
   const handleLogout=async()=>{await sb.auth.signOut();setShowSettings(false);};
+
+  const connectCal=async()=>{
+    await sb.auth.signInWithOAuth({provider:'google',options:{
+      redirectTo:'https://vasquezryanj-sudo.github.io/TaskBloc/',
+      scopes:'https://www.googleapis.com/auth/calendar',
+      queryParams:{access_type:'offline',prompt:'consent'}
+    }});
+  };
+
+  const disconnectCal=async()=>{
+    if(!user)return;
+    await sb.from('user_calendars').delete().eq('user_id',user.id);
+    setCalConnected(false);
+  };
 
   const fullSync=async()=>{setSyncStatus('syncing');try{const[t,f,p]=await Promise.all([dbLoadTasks(),dbLoadForward(),dbLoadProjects()]);setTasks(t);setForward(f);setProjects(p);setSyncStatus('ok');checkRollover(t);}catch(e){console.error(e);setSyncStatus('error');}};
 
@@ -1470,7 +1512,7 @@ function App(){
     {projectDetail&&<ProjectDetailModal project={projectDetail} tasks={tasks} forward={forward} projects={projects} onClose={()=>setProjectDetail(null)} onOpenTask={(t,readOnly)=>{if(readOnly){setReadOnlyTask(t);}else{if(t.dayKey==='forward')setEditFwd(t);else setEditing({task:t,dayKey:t.dayKey});}}} onAddTask={()=>{setAddingForProject({id:uid(),name:'',status:'',context:'',complete:false,attachments:[],tags:[projectDetail.name],due:'',estimate:'',recurring:false,recurringFrequency:''});}}/>}
     {readOnlyTask&&<ReadOnlyTaskModal task={readOnlyTask} onClose={()=>setReadOnlyTask(null)} projects={projects}/>}
     {addingForProject&&<TaskModal task={addingForProject} onClose={()=>setAddingForProject(null)} onSave={u=>{const todayKey=dk(new Date());setTasks(prev=>{const next={...prev,[todayKey]:[...(prev[todayKey]||[]),u]};scheduleSave(next,forward);return next;});setAddingForProject(null);}} onDelete={()=>setAddingForProject(null)} projects={projects} onCreateProject={createProject}/>}
-    {showSettings&&<SettingsDrawer onClose={()=>setShowSettings(false)} user={user} onLogout={handleLogout}/>}
+    {showSettings&&<SettingsDrawer onClose={()=>setShowSettings(false)} user={user} onLogout={handleLogout} calConnected={calConnected} onConnectCal={connectCal} onDisconnectCal={disconnectCal}/>}
     {(addMediaModal||editMedia)&&<MediaEntryModal entry={editMedia||{}} onClose={()=>{setAddMediaModal(false);setEditMedia(null);}} onSave={item=>{editMedia?updateMedia(item):addMedia(item);setAddMediaModal(false);setEditMedia(null);}} onDelete={editMedia?()=>{removeMedia(editMedia.id);setEditMedia(null);}:undefined}/>}
     {rolloverTasks.length>0&&<RolloverModal tasks={rolloverTasks} onComplete={rolloverComplete} onDelete={rolloverDelete} onKeep={id=>setRolloverTasks(prev=>prev.filter(t=>t.id!==id))} onKeepAll={rolloverKeepAll}/>}
   </div>);
