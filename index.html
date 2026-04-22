@@ -394,6 +394,13 @@ body{background-image:radial-gradient(ellipse at 15% 80%,rgba(192,72,32,0.04) 0%
 .settings-toggle{width:36px;height:20px;border-radius:10px;background:var(--surface3);border:1.5px solid var(--border);position:relative;flex-shrink:0;cursor:not-allowed;}
 .settings-toggle::after{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:var(--border2);transition:transform .2s;}
 .settings-divider{height:1px;background:linear-gradient(90deg,transparent,var(--border),transparent);margin:0 20px;}
+.sched-panel{padding:8px 20px 12px;background:var(--surface2);border-top:1px solid var(--border);border-bottom:1px solid var(--border);}
+.sched-panel .field{margin-bottom:10px;}
+.sched-panel .field label{display:block;font-size:11px;font-weight:600;color:var(--text2);margin-bottom:4px;}
+.sched-panel .field select{width:100%;background:var(--surface);border:1.5px solid var(--border);border-radius:10px;padding:9px 12px;font-family:'Plus Jakarta Sans',sans-serif;font-size:13px;color:var(--text);outline:none;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23999'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;}
+.sched-panel .sched-row{display:flex;gap:8px;}
+.sched-panel .sched-row .field{flex:1;}
+.sched-save{margin-top:4px;width:100%;}
 .settings-version{font-size:10px;color:var(--text3);text-align:center;padding:20px;margin-top:auto;font-style:italic;}
 .settings-drag-handle{display:none;}
 .mob-gear{display:none;}
@@ -1148,8 +1155,49 @@ function LoginScreen(){
   );
 }
 
-function SettingsDrawer({onClose,user,onLogout,calConnected,onConnectCal,onDisconnectCal}){
+const US_TZ=['America/New_York','America/Chicago','America/Denver','America/Los_Angeles','America/Anchorage','Pacific/Honolulu'];
+const ALL_TZ=(()=>{try{return Intl.supportedValuesOf('timeZone').filter(t=>!US_TZ.includes(t)).sort();}catch(e){return[];}})();
+const TIME_OPTS_START=(()=>{const o=[];for(let h=6;h<=21;h++)for(let m=0;m<60;m+=30){if(h===21&&m>30)break;const hh=h>12?h-12:h===0?12:h;const ap=h>=12?'pm':'am';o.push({val:h*60+m,label:`${hh}:${String(m).padStart(2,'0')}${ap}`});}return o;})();
+const TIME_OPTS_END=(()=>{const o=[];for(let h=6;h<=22;h++)for(let m=0;m<60;m+=30){if(h===6&&m===0)continue;if(h===22&&m>0)break;const hh=h>12?h-12:h===0?12:h;const ap=h>=12?'pm':'am';o.push({val:h*60+m,label:`${hh}:${String(m).padStart(2,'0')}${ap}`});}return o;})();
+const tzShort=tz=>{const map={'America/New_York':'New York','America/Chicago':'Chicago','America/Denver':'Denver','America/Los_Angeles':'Los Angeles','America/Anchorage':'Anchorage','Pacific/Honolulu':'Honolulu'};return map[tz]||tz.split('/').pop().replace(/_/g,' ');};
+const minsToLabel=m=>{const h=Math.floor(m/60);const mm=m%60;const hh=h>12?h-12:h===0?12:h;const ap=h>=12?'pm':'am';return `${hh}:${String(mm).padStart(2,'0')}${ap}`;};
+
+function SchedulingPrefsPanel({user}){
+  const [start,setStart]=useState(720);
+  const [end,setEnd]=useState(1020);
+  const [tz,setTz]=useState('America/New_York');
+  const [saving,setSaving]=useState(false);
+  const [loaded,setLoaded]=useState(false);
+  useEffect(()=>{
+    if(!user)return;
+    sb.from('user_preferences').select('*').eq('user_id',user.id).maybeSingle().then(({data})=>{
+      if(data){setStart(data.scheduling_start??720);setEnd(data.scheduling_end??1020);setTz(data.timezone||'America/New_York');}
+      setLoaded(true);
+    });
+  },[user]);
+  const save=async()=>{
+    if(!user)return;
+    setSaving(true);
+    await sb.from('user_preferences').upsert({user_id:user.id,scheduling_start:start,scheduling_end:end,timezone:tz},{onConflict:'user_id'});
+    setSaving(false);
+  };
+  if(!loaded)return null;
+  return(<div className="sched-panel">
+    <div className="sched-row">
+      <div className="field"><label>Start Time</label><select value={start} onChange={e=>setStart(Number(e.target.value))}>{TIME_OPTS_START.map(o=><option key={o.val} value={o.val}>{o.label}</option>)}</select></div>
+      <div className="field"><label>End Time</label><select value={end} onChange={e=>setEnd(Number(e.target.value))}>{TIME_OPTS_END.filter(o=>o.val>start).map(o=><option key={o.val} value={o.val}>{o.label}</option>)}</select></div>
+    </div>
+    <div className="field"><label>Timezone</label><select value={tz} onChange={e=>setTz(e.target.value)}>
+      <optgroup label="US Timezones">{US_TZ.map(t=><option key={t} value={t}>{tzShort(t)}</option>)}</optgroup>
+      <optgroup label="All Timezones">{ALL_TZ.map(t=><option key={t} value={t}>{t}</option>)}</optgroup>
+    </select></div>
+    <button className="btn primary sched-save" onClick={save} disabled={saving}>{saving?'Saving…':'Save Preferences'}</button>
+  </div>);
+}
+
+function SettingsDrawer({onClose,user,onLogout,calConnected,onConnectCal,onDisconnectCal,schedPrefs}){
   const [showAbout,setShowAbout]=useState(false);
+  const [showSched,setShowSched]=useState(false);
   return(<>
     <div className="settings-overlay" onClick={onClose}/>
     <div className="settings-drawer">
@@ -1182,10 +1230,11 @@ function SettingsDrawer({onClose,user,onLogout,calConnected,onConnectCal,onDisco
       </div>
       <div className="settings-divider"/>
       <div className="settings-section-label">Preferences</div>
-      <div className="settings-item" style={{opacity:.55,cursor:'default'}}>
-        <div className="settings-item-left"><div className="settings-item-label">Scheduling Window</div><div className="settings-item-sub">12:00pm – 5:00pm</div></div>
-        <span className="settings-soon">Coming soon</span>
+      <div className="settings-item" style={{cursor:'pointer'}} onClick={()=>setShowSched(s=>!s)}>
+        <div className="settings-item-left"><div className="settings-item-label">Scheduling Window</div><div className="settings-item-sub">{schedPrefs?`${minsToLabel(schedPrefs.scheduling_start)} – ${minsToLabel(schedPrefs.scheduling_end)} · ${tzShort(schedPrefs.timezone)}`:'12:00pm – 5:00pm · New York'}</div></div>
+        <span style={{fontSize:'14px',color:'var(--text3)'}}>{showSched?'▲':'▼'}</span>
       </div>
+      {showSched&&<SchedulingPrefsPanel user={user}/>}
       <div className="settings-item" style={{opacity:.55,cursor:'default'}}>
         <div className="settings-item-left"><div className="settings-item-label">Dark Mode</div></div>
         <div style={{display:'flex',alignItems:'center',gap:'8px'}}><span className="settings-soon">Coming soon</span><div className="settings-toggle"/></div>
@@ -1261,6 +1310,13 @@ function App(){
   const [showSettings,setShowSettings]=useState(false);
   const [rolloverTasks,setRolloverTasks]=useState([]);
   const [calConnected,setCalConnected]=useState(false);
+  const [schedPrefs,setSchedPrefs]=useState(null);
+
+  // Load scheduling preferences
+  const loadSchedPrefs=async(userId)=>{
+    const{data}=await sb.from('user_preferences').select('*').eq('user_id',userId).maybeSingle();
+    setSchedPrefs(data);
+  };
 
   // Check if user has calendar connected
   const checkCalConnection=async(userId)=>{
@@ -1283,14 +1339,14 @@ function App(){
       currentUserId=s?.user?.id||null;
       setSession(s||null);
       setUser(s?.user||null);
-      if(s?.user?.id)checkCalConnection(s.user.id);
+      if(s?.user?.id){checkCalConnection(s.user.id);loadSchedPrefs(s.user.id);}
       saveCalTokenIfNeeded(s);
     });
     const{data:{subscription}}=sb.auth.onAuthStateChange((_event,s)=>{
       currentUserId=s?.user?.id||null;
       setSession(s||null);
       setUser(s?.user||null);
-      if(s?.user?.id)checkCalConnection(s.user.id);
+      if(s?.user?.id){checkCalConnection(s.user.id);loadSchedPrefs(s.user.id);}
       if(_event==='SIGNED_IN')saveCalTokenIfNeeded(s);
     });
     return()=>subscription.unsubscribe();
@@ -1512,7 +1568,7 @@ function App(){
     {projectDetail&&<ProjectDetailModal project={projectDetail} tasks={tasks} forward={forward} projects={projects} onClose={()=>setProjectDetail(null)} onOpenTask={(t,readOnly)=>{if(readOnly){setReadOnlyTask(t);}else{if(t.dayKey==='forward')setEditFwd(t);else setEditing({task:t,dayKey:t.dayKey});}}} onAddTask={()=>{setAddingForProject({id:uid(),name:'',status:'',context:'',complete:false,attachments:[],tags:[projectDetail.name],due:'',estimate:'',recurring:false,recurringFrequency:''});}}/>}
     {readOnlyTask&&<ReadOnlyTaskModal task={readOnlyTask} onClose={()=>setReadOnlyTask(null)} projects={projects}/>}
     {addingForProject&&<TaskModal task={addingForProject} onClose={()=>setAddingForProject(null)} onSave={u=>{const todayKey=dk(new Date());setTasks(prev=>{const next={...prev,[todayKey]:[...(prev[todayKey]||[]),u]};scheduleSave(next,forward);return next;});setAddingForProject(null);}} onDelete={()=>setAddingForProject(null)} projects={projects} onCreateProject={createProject}/>}
-    {showSettings&&<SettingsDrawer onClose={()=>setShowSettings(false)} user={user} onLogout={handleLogout} calConnected={calConnected} onConnectCal={connectCal} onDisconnectCal={disconnectCal}/>}
+    {showSettings&&<SettingsDrawer onClose={()=>setShowSettings(false)} user={user} onLogout={handleLogout} calConnected={calConnected} onConnectCal={connectCal} onDisconnectCal={disconnectCal} schedPrefs={schedPrefs}/>}
     {(addMediaModal||editMedia)&&<MediaEntryModal entry={editMedia||{}} onClose={()=>{setAddMediaModal(false);setEditMedia(null);}} onSave={item=>{editMedia?updateMedia(item):addMedia(item);setAddMediaModal(false);setEditMedia(null);}} onDelete={editMedia?()=>{removeMedia(editMedia.id);setEditMedia(null);}:undefined}/>}
     {rolloverTasks.length>0&&<RolloverModal tasks={rolloverTasks} onComplete={rolloverComplete} onDelete={rolloverDelete} onKeep={id=>setRolloverTasks(prev=>prev.filter(t=>t.id!==id))} onKeepAll={rolloverKeepAll}/>}
   </div>);

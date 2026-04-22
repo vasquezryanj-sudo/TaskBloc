@@ -132,9 +132,11 @@ async function scheduleForUser(
   dayKey: string,
   dateStr: string,
   tz: string,
+  dayStart: number,
+  dayEnd: number,
 ): Promise<{ scheduled: string[]; error?: string }> {
-  const DAY_START = 12 * 60;
-  const DAY_END = 17 * 60;
+  const DAY_START = dayStart;
+  const DAY_END = dayEnd;
 
   // Fetch user's incomplete tasks for today
   const { data: tasks, error: taskErr } = await sb
@@ -148,9 +150,13 @@ async function scheduleForUser(
   if (taskErr) throw taskErr;
   if (!tasks || tasks.length === 0) return { scheduled: [] };
 
-  // Fetch today's calendar events (12pm–5pm)
-  const timeMin = `${dateStr}T12:00:00`;
-  const timeMax = `${dateStr}T17:00:00`;
+  // Fetch today's calendar events in scheduling window
+  const startH = String(Math.floor(DAY_START / 60)).padStart(2, "0");
+  const startM = String(DAY_START % 60).padStart(2, "0");
+  const endH = String(Math.floor(DAY_END / 60)).padStart(2, "0");
+  const endM = String(DAY_END % 60).padStart(2, "0");
+  const timeMin = `${dateStr}T${startH}:${startM}:00`;
+  const timeMax = `${dateStr}T${endH}:${endM}:00`;
   const calParams = new URLSearchParams({
     timeMin: new Date(timeMin).toISOString(),
     timeMax: new Date(timeMax).toISOString(),
@@ -346,13 +352,24 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Failed to load user_calendars" }), { status: 500 });
     }
 
+    // Load all user preferences
+    const { data: allPrefs } = await sb.from("user_preferences").select("*");
+    const prefsMap: Record<string, any> = {};
+    for (const p of allPrefs || []) prefsMap[p.user_id] = p;
+
     const results: Record<string, any> = {};
     for (const calUser of calUsers || []) {
       try {
+        const prefs = prefsMap[calUser.user_id];
+        const userTz = prefs?.timezone || "America/New_York";
+        const userStart = prefs?.scheduling_start ?? 720;
+        const userEnd = prefs?.scheduling_end ?? 1020;
+        const userDayKey = todayKey(userTz);
+        const userDateStr = todayISO(userTz);
         const accessToken = await getAccessTokenForUser(calUser.refresh_token);
-        const result = await scheduleForUser(calUser.user_id, accessToken, dayKey, dateStr, tz);
+        const result = await scheduleForUser(calUser.user_id, accessToken, userDayKey, userDateStr, userTz, userStart, userEnd);
         results[calUser.user_id] = { scheduled: result.scheduled.length, tasks: result.scheduled };
-        console.log(`[user=${calUser.user_id}] Scheduled ${result.scheduled.length} tasks`);
+        console.log(`[user=${calUser.user_id}] Scheduled ${result.scheduled.length} tasks (${userTz}, ${userStart}-${userEnd})`);
       } catch (err) {
         console.error(`[user=${calUser.user_id}] Error:`, err);
         results[calUser.user_id] = { error: String(err) };
