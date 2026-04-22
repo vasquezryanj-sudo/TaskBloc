@@ -103,7 +103,7 @@ body{background-image:radial-gradient(ellipse at 15% 80%,rgba(192,72,32,0.04) 0%
 /* TASK ITEMS */
 .task-item{background:var(--surface2);border:1.5px solid var(--border);border-radius:12px;padding:11px 13px;display:flex;align-items:center;gap:9px;cursor:grab;transition:all .25s cubic-bezier(.4,0,.2,1);position:relative;user-select:none;box-shadow:0 1px 2px var(--shadow);flex-shrink:0;}
 .task-item:hover{border-color:var(--border2);background:var(--surface);box-shadow:0 2px 6px var(--shadow),0 6px 20px var(--shadow2);transform:translateY(-2px);}
-.task-item.dragging{opacity:.35;cursor:grabbing;transform:scale(.98);}
+.task-item.dragging{cursor:grabbing;transform:scale(.98);}
 .task-item.drag-over{border-color:var(--accent);border-style:dashed;background:var(--accent-light);}
 .drag-handle{color:var(--text3);font-size:13px;opacity:.3;flex-shrink:0;transition:opacity .2s;}
 .task-item:hover .drag-handle{opacity:.8;}
@@ -118,9 +118,6 @@ body{background-image:radial-gradient(ellipse at 15% 80%,rgba(192,72,32,0.04) 0%
 .task-meta{display:flex;align-items:center;gap:5px;flex-shrink:0;}
 .attach-badge{font-size:10px;color:var(--text3);}
 
-/* complete animation */
-@keyframes completeSlide{0%{opacity:1;transform:translateX(0) scale(1);}60%{opacity:.6;transform:translateX(10px) scale(.98);}100%{opacity:0;transform:translateX(40px) scale(.95);}}
-.task-item.completing{animation:completeSlide .35s cubic-bezier(.4,0,.2,1) forwards;}
 
 .drop-zone-hint{border:2px dashed var(--border);border-radius:12px;padding:10px;text-align:center;font-size:11px;color:var(--text3);margin-top:10px;transition:all .25s cubic-bezier(.4,0,.2,1);font-style:italic;flex-shrink:0;}
 .drop-zone-hint.active{border-color:var(--accent);color:var(--accent);background:var(--accent-light);border-style:solid;}
@@ -668,12 +665,8 @@ function RolloverModal({tasks,onComplete,onDelete,onKeep,onKeepAll}){
 }
 
 function TaskItem({task,onToggle,onOpen,onDragStart,onDragEnd,onDragOver,onDrop,isDragging,isDragOver,projects}){
-  const [completing,setCompleting]=useState(false);
-  const handleToggle=()=>{
-    if(!task.complete){setCompleting(true);setTimeout(()=>{onToggle(task.id);setCompleting(false);},280);}
-    else onToggle(task.id);
-  };
-  return(<div className={'task-item'+(isDragging?' dragging':'')+(isDragOver?' drag-over':'')+(completing?' completing':'')} draggable onDragStart={e=>onDragStart(e,task.id)} onDragEnd={onDragEnd} onDragOver={e=>{e.preventDefault();onDragOver(task.id);}} onDrop={e=>{e.preventDefault();onDrop(task.id);}}>
+  const handleToggle=()=>onToggle(task.id);
+  return(<div className={'task-item'+(isDragging?' dragging':'')+(isDragOver?' drag-over':'')} draggable onDragStart={e=>onDragStart(e,task.id)} onDragEnd={onDragEnd} onDragOver={e=>{e.preventDefault();onDragOver(task.id);}} onDrop={e=>{e.preventDefault();onDrop(task.id);}}>
     <span className="drag-handle" onMouseDown={e=>e.stopPropagation()}>⠿</span>
     <div className="task-check-zone" onClick={e=>{e.stopPropagation();handleToggle();}}>
       <div className={'task-check'+(task.complete?' on':'')}/>
