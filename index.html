@@ -1310,6 +1310,19 @@ function App(){
   };
   useEffect(()=>{if(session)fullSync();},[session]);
 
+  // Re-check rollover on visibility change (tab/app refocus) and at midnight EST
+  useEffect(()=>{
+    if(!session)return;
+    const onVisible=()=>{if(document.visibilityState==='visible')fullSync();};
+    document.addEventListener('visibilitychange',onVisible);
+    // Schedule a sync just after midnight EST
+    const now=estNow();
+    const midnight=new Date(now);midnight.setDate(midnight.getDate()+1);midnight.setHours(0,0,10,0);
+    const ms=midnight-now;
+    const midnightTimer=setTimeout(()=>fullSync(),ms);
+    return()=>{document.removeEventListener('visibilitychange',onVisible);clearTimeout(midnightTimer);};
+  },[session]);
+
   const scheduleSave=(tasksObj,fwdArr)=>{
     if(saveTimer.current)clearTimeout(saveTimer.current);
     setSyncStatus('syncing');
