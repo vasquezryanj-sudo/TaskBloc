@@ -1,0 +1,19 @@
+{
+  "name": "TaskBloc",
+  "short_name": "TaskBloc",
+  "description": "your days, organized",
+  "start_url": "/TaskBloc/",
+  "scope": "/TaskBloc/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#faf7f2",
+  "theme_color": "#c45c2a",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

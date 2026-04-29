@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">TaskBloc</string>
+    <string name="title_activity_main">TaskBloc</string>
+    <string name="package_name">com.provenance.taskbloc</string>
+    <string name="custom_url_scheme">com.provenance.taskbloc</string>
+</resources>
