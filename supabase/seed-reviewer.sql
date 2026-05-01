@@ -10,6 +10,12 @@
 --
 -- After creating the user, run this script.
 
+-- Verified schema:
+-- tasks: id(text), day_key(text), name(text), status(text), context(text), complete(bool), attachments(jsonb), position(int), estimate(text), tags(jsonb), due(text), start(text), recurring(bool), recurring_frequency(text), user_id(uuid)
+-- forward_tasks: id(text), name(text), status(text), context(text), complete(bool), attachments(jsonb), position(int), estimate(text), tags(jsonb), due(text), start(text), user_id(uuid)
+-- projects: id(text), name(text), color(text), archived(bool), user_id(uuid)
+-- user_preferences: id(uuid), user_id(uuid), scheduling_start(int), scheduling_end(int), timezone(text)
+
 DO $$
 DECLARE
   reviewer_id uuid;
@@ -17,7 +23,6 @@ DECLARE
   tomorrow text;
   day_after text;
 BEGIN
-  -- Look up the reviewer user by email
   SELECT id INTO reviewer_id FROM auth.users WHERE email = 'taskbloc.reviewer@withprovenance.org';
 
   IF reviewer_id IS NULL THEN
@@ -34,42 +39,42 @@ BEGIN
   DELETE FROM projects WHERE user_id = reviewer_id;
   DELETE FROM user_preferences WHERE user_id = reviewer_id;
 
-  -- Insert user preferences
+  -- user_preferences
   INSERT INTO user_preferences (user_id, timezone, scheduling_start, scheduling_end)
   VALUES (reviewer_id, 'America/New_York', 540, 1020);
 
-  -- Insert projects (columns: id, user_id, name, color, archived)
+  -- projects (id is text, not uuid)
   INSERT INTO projects (id, user_id, name, color, archived) VALUES
-    (gen_random_uuid(), reviewer_id, 'App Launch', '#C04820', false),
-    (gen_random_uuid(), reviewer_id, 'Marketing', '#6D50A0', false),
-    (gen_random_uuid(), reviewer_id, 'Personal', '#2E7D32', false);
+    ('proj_review_1', reviewer_id, 'App Launch', '#C04820', false),
+    ('proj_review_2', reviewer_id, 'Marketing', '#6D50A0', false),
+    ('proj_review_3', reviewer_id, 'Personal', '#2E7D32', false);
 
-  -- Insert today's tasks (columns: id, user_id, day_key, name, status, context, complete, attachments, tags, due, estimate, recurring, recurring_frequency, position)
-  INSERT INTO tasks (id, user_id, day_key, name, status, context, complete, attachments, tags, due, estimate, recurring, recurring_frequency, position) VALUES
-    (gen_random_uuid(), reviewer_id, today, 'Review PR for onboarding flow', '', 'App Launch', true, '[]', '[]', '', '30m', false, '', 0),
-    (gen_random_uuid(), reviewer_id, today, 'Write release notes for v2.1', '', 'App Launch', false, '[]', '[]', '', '20m', false, '', 1),
-    (gen_random_uuid(), reviewer_id, today, 'Schedule social media posts', '', 'Marketing', false, '[]', '[]', '', '15m', false, '', 2),
-    (gen_random_uuid(), reviewer_id, today, 'Team standup at 10am', '', '', true, '[]', '[]', '', '15m', false, '', 3),
-    (gen_random_uuid(), reviewer_id, today, 'Gym – upper body', '', 'Personal', false, '[]', '[]', '', '45m', false, '', 4),
-    (gen_random_uuid(), reviewer_id, today, 'Reply to design feedback', '', 'App Launch', false, '[]', '[]', '', '10m', false, '', 5);
+  -- tasks for today
+  INSERT INTO tasks (id, user_id, day_key, name, status, context, complete, attachments, position, estimate, tags, due, start, recurring, recurring_frequency) VALUES
+    ('rev_t1', reviewer_id, today, 'Review PR for onboarding flow', '', 'App Launch', true, '[]', 0, '30m', '[]', '', '', false, ''),
+    ('rev_t2', reviewer_id, today, 'Write release notes for v2.1', '', 'App Launch', false, '[]', 1, '20m', '[]', '', '', false, ''),
+    ('rev_t3', reviewer_id, today, 'Schedule social media posts', '', 'Marketing', false, '[]', 2, '15m', '[]', '', '', false, ''),
+    ('rev_t4', reviewer_id, today, 'Team standup at 10am', '', '', true, '[]', 3, '15m', '[]', '', '', false, ''),
+    ('rev_t5', reviewer_id, today, 'Gym – upper body', '', 'Personal', false, '[]', 4, '45m', '[]', '', '', false, ''),
+    ('rev_t6', reviewer_id, today, 'Reply to design feedback', '', 'App Launch', false, '[]', 5, '10m', '[]', '', '', false, '');
 
-  -- Insert tomorrow's tasks
-  INSERT INTO tasks (id, user_id, day_key, name, status, context, complete, attachments, tags, due, estimate, recurring, recurring_frequency, position) VALUES
-    (gen_random_uuid(), reviewer_id, tomorrow, 'Finalize landing page copy', '', 'Marketing', false, '[]', '[]', '', '45m', false, '', 0),
-    (gen_random_uuid(), reviewer_id, tomorrow, 'Fix notification bug on iOS', '', 'App Launch', false, '[]', '[]', '', '1h', false, '', 1),
-    (gen_random_uuid(), reviewer_id, tomorrow, 'Lunch with Sarah', '', 'Personal', false, '[]', '[]', '', '1h', false, '', 2);
+  -- tasks for tomorrow
+  INSERT INTO tasks (id, user_id, day_key, name, status, context, complete, attachments, position, estimate, tags, due, start, recurring, recurring_frequency) VALUES
+    ('rev_t7', reviewer_id, tomorrow, 'Finalize landing page copy', '', 'Marketing', false, '[]', 0, '45m', '[]', '', '', false, ''),
+    ('rev_t8', reviewer_id, tomorrow, 'Fix notification bug on iOS', '', 'App Launch', false, '[]', 1, '1h', '[]', '', '', false, ''),
+    ('rev_t9', reviewer_id, tomorrow, 'Lunch with Sarah', '', 'Personal', false, '[]', 2, '1h', '[]', '', '', false, '');
 
-  -- Insert day-after tasks
-  INSERT INTO tasks (id, user_id, day_key, name, status, context, complete, attachments, tags, due, estimate, recurring, recurring_frequency, position) VALUES
-    (gen_random_uuid(), reviewer_id, day_after, 'Sprint planning meeting', '', 'App Launch', false, '[]', '[]', '', '1h', false, '', 0),
-    (gen_random_uuid(), reviewer_id, day_after, 'Research competitor pricing', '', 'Marketing', false, '[]', '[]', '', '30m', false, '', 1);
+  -- tasks for day after
+  INSERT INTO tasks (id, user_id, day_key, name, status, context, complete, attachments, position, estimate, tags, due, start, recurring, recurring_frequency) VALUES
+    ('rev_t10', reviewer_id, day_after, 'Sprint planning meeting', '', 'App Launch', false, '[]', 0, '1h', '[]', '', '', false, ''),
+    ('rev_t11', reviewer_id, day_after, 'Research competitor pricing', '', 'Marketing', false, '[]', 1, '30m', '[]', '', '', false, '');
 
-  -- Insert forward-looking tasks (columns: id, user_id, name, status, context, complete, attachments, tags, due, estimate, recurring, recurring_frequency, position)
-  INSERT INTO forward_tasks (id, user_id, name, status, context, complete, attachments, tags, due, estimate, recurring, recurring_frequency, position) VALUES
-    (gen_random_uuid(), reviewer_id, 'Submit app to App Store', '', 'App Launch', false, '[]', '[]', '', '', false, '', 0),
-    (gen_random_uuid(), reviewer_id, 'Plan Q3 content calendar', '', 'Marketing', false, '[]', '[]', '', '', false, '', 1),
-    (gen_random_uuid(), reviewer_id, 'Book dentist appointment', '', 'Personal', false, '[]', '[]', '', '', false, '', 2),
-    (gen_random_uuid(), reviewer_id, 'Prepare investor update deck', '', 'App Launch', false, '[]', '[]', '', '', false, '', 3);
+  -- forward_tasks (no recurring columns)
+  INSERT INTO forward_tasks (id, user_id, name, status, context, complete, attachments, position, estimate, tags, due, start) VALUES
+    ('rev_f1', reviewer_id, 'Submit app to App Store', '', 'App Launch', false, '[]', 0, '', '[]', '', ''),
+    ('rev_f2', reviewer_id, 'Plan Q3 content calendar', '', 'Marketing', false, '[]', 1, '', '[]', '', ''),
+    ('rev_f3', reviewer_id, 'Book dentist appointment', '', 'Personal', false, '[]', 2, '', '[]', '', ''),
+    ('rev_f4', reviewer_id, 'Prepare investor update deck', '', 'App Launch', false, '[]', 3, '', '[]', '', '');
 
   RAISE NOTICE 'Reviewer demo data seeded successfully for user %', reviewer_id;
 END $$;
