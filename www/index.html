@@ -424,7 +424,8 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline-offset:1
 
 /* LOGIN SCREEN */
 .login-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100dvh;background:var(--bg);background-image:radial-gradient(ellipse at 15% 80%,rgba(192,72,32,0.06) 0%,transparent 50%),radial-gradient(ellipse at 85% 15%,rgba(109,80,160,0.04) 0%,transparent 50%);padding:40px 24px;gap:0;}
-.login-logo{font-family:'Fraunces',serif;font-weight:700;font-size:48px;color:var(--accent);letter-spacing:-1px;margin-bottom:6px;}
+.login-icon{width:90px;height:90px;border-radius:20px;margin-bottom:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;}
+.login-logo{font-family:'Fraunces',serif;font-weight:700;font-size:28px;color:var(--accent);letter-spacing:-0.5px;margin-bottom:6px;}
 .login-tagline{font-size:14px;color:var(--text3);font-style:italic;letter-spacing:0.3px;margin-bottom:48px;text-align:center;}
 .login-card{background:var(--surface);border:1.5px solid var(--border);border-radius:24px;padding:36px 32px;display:flex;flex-direction:column;align-items:center;gap:20px;box-shadow:0 2px 8px var(--shadow),0 8px 32px var(--shadow2);width:100%;max-width:360px;}
 .login-card-title{font-family:'Fraunces',serif;font-weight:600;font-size:18px;color:var(--text);text-align:center;}
@@ -1145,6 +1146,7 @@ function LoginScreen(){
 
   return(
     <div className="login-screen">
+      <img src="icon.png" alt="TaskBloc" className="login-icon" onClick={handleLogoTap} onTouchEnd={e=>{e.preventDefault();handleLogoTap();}} />
       <div className="login-logo" onClick={handleLogoTap} onTouchEnd={e=>{e.preventDefault();handleLogoTap();}} style={{userSelect:'none',WebkitUserSelect:'none',cursor:'pointer',WebkitTapHighlightColor:'transparent'}}>TaskBloc</div>
       <div className="login-tagline">your days, organized</div>
       <div className="login-card">
