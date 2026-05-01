@@ -424,7 +424,8 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline-offset:1
 
 /* LOGIN SCREEN */
 .login-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100dvh;background:var(--bg);background-image:radial-gradient(ellipse at 15% 80%,rgba(192,72,32,0.06) 0%,transparent 50%),radial-gradient(ellipse at 85% 15%,rgba(109,80,160,0.04) 0%,transparent 50%);padding:40px 24px;gap:0;}
-.login-logo{font-family:'Fraunces',serif;font-weight:700;font-size:48px;color:var(--accent);letter-spacing:-1px;margin-bottom:6px;}
+.login-icon{width:90px;height:90px;border-radius:20px;margin-bottom:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;}
+.login-logo{font-family:'Fraunces',serif;font-weight:700;font-size:28px;color:var(--accent);letter-spacing:-0.5px;margin-bottom:6px;}
 .login-tagline{font-size:14px;color:var(--text3);font-style:italic;letter-spacing:0.3px;margin-bottom:48px;text-align:center;}
 .login-card{background:var(--surface);border:1.5px solid var(--border);border-radius:24px;padding:36px 32px;display:flex;flex-direction:column;align-items:center;gap:20px;box-shadow:0 2px 8px var(--shadow),0 8px 32px var(--shadow2);width:100%;max-width:360px;}
 .login-card-title{font-family:'Fraunces',serif;font-weight:600;font-size:18px;color:var(--text);text-align:center;}
@@ -1104,20 +1105,49 @@ function ProjectDetailModal({project,tasks,forward,projects,onClose,onOpenTask,o
   </div>);
 }
 
+const REVIEWER_EMAIL='taskbloc.reviewer@withprovenance.org';
+const REVIEWER_PASS='R3v!ew_TaskBl0c_2026';
+
 function LoginScreen(){
   const [loading,setLoading]=useState(false);
   const [loadingApple,setLoadingApple]=useState(false);
+  const [showReview,setShowReview]=useState(()=>new URLSearchParams(window.location.search).get('review')==='true');
+  const [reviewEmail,setReviewEmail]=useState('');
+  const [reviewPass,setReviewPass]=useState('');
+  const [reviewErr,setReviewErr]=useState('');
+  const [reviewLoading,setReviewLoading]=useState(false);
+  const tapCount=useRef(0);
+  const tapTimer=useRef(null);
+
+  const handleLogoTap=()=>{
+    tapCount.current++;
+    console.log('[ReviewBypass] Logo tap #'+tapCount.current);
+    if(tapTimer.current)clearTimeout(tapTimer.current);
+    if(tapCount.current>=5){tapCount.current=0;console.log('[ReviewBypass] Activated');setShowReview(true);return;}
+    tapTimer.current=setTimeout(()=>{tapCount.current=0;},2000);
+  };
+
   const signIn=async()=>{
     setLoading(true);
-    await sb.auth.signInWithOAuth({provider:'google',options:{redirectTo:'https://vasquezryanj-sudo.github.io/TaskBloc/'}});
+    await sb.auth.signInWithOAuth({provider:'google',options:{redirectTo:'https://task-bloc.vercel.app/'}});
   };
   const signInApple=async()=>{
     setLoadingApple(true);
-    await sb.auth.signInWithOAuth({provider:'apple',options:{redirectTo:'https://vasquezryanj-sudo.github.io/TaskBloc/'}});
+    await sb.auth.signInWithOAuth({provider:'apple',options:{redirectTo:'https://task-bloc.vercel.app/'}});
   };
+  const signInReview=async(e)=>{
+    e.preventDefault();
+    setReviewErr('');
+    if(reviewEmail!==REVIEWER_EMAIL){setReviewErr('Invalid reviewer account');return;}
+    setReviewLoading(true);
+    const{error}=await sb.auth.signInWithPassword({email:reviewEmail,password:reviewPass});
+    if(error){setReviewErr(error.message);setReviewLoading(false);}
+  };
+
   return(
     <div className="login-screen">
-      <div className="login-logo">TaskBloc</div>
+      <img src="icon.png" alt="TaskBloc" className="login-icon" onClick={handleLogoTap} onTouchEnd={e=>{e.preventDefault();handleLogoTap();}} />
+      <div className="login-logo" onClick={handleLogoTap} onTouchEnd={e=>{e.preventDefault();handleLogoTap();}} style={{userSelect:'none',WebkitUserSelect:'none',cursor:'pointer',WebkitTapHighlightColor:'transparent'}}>TaskBloc</div>
       <div className="login-tagline">your days, organized</div>
       <div className="login-card">
         <div className="login-card-title">Welcome back</div>
@@ -1137,6 +1167,12 @@ function LoginScreen(){
           </svg>
           {loadingApple?'Redirecting…':'Sign in with Apple'}
         </button>
+        {showReview&&<form onSubmit={signInReview} style={{width:'100%',display:'flex',flexDirection:'column',gap:'12px',borderTop:'1px solid var(--border)',paddingTop:'16px',marginTop:'4px'}}>
+          <input type="email" placeholder="Reviewer email" value={reviewEmail} onChange={e=>setReviewEmail(e.target.value)} style={{padding:'10px 14px',borderRadius:'10px',border:'1.5px solid var(--border)',fontSize:'14px',background:'var(--bg)',color:'var(--text)'}} autoComplete="email"/>
+          <input type="password" placeholder="Password" value={reviewPass} onChange={e=>setReviewPass(e.target.value)} style={{padding:'10px 14px',borderRadius:'10px',border:'1.5px solid var(--border)',fontSize:'14px',background:'var(--bg)',color:'var(--text)'}} autoComplete="current-password"/>
+          {reviewErr&&<div style={{color:'#c04820',fontSize:'12px',textAlign:'center'}}>{reviewErr}</div>}
+          <button type="submit" disabled={reviewLoading} style={{padding:'10px',borderRadius:'10px',border:'none',background:'var(--accent)',color:'#fff',fontWeight:600,fontSize:'14px',cursor:'pointer'}}>{reviewLoading?'Signing in…':'Sign in with Email'}</button>
+        </form>}
       </div>
       <div className="login-footer" style={{marginTop:'24px'}}>
         By signing in you agree to our <a href="https://www.withprovenance.org/products/taskbloc/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.
@@ -1348,7 +1384,7 @@ function App(){
 
   const connectCal=async()=>{
     await sb.auth.signInWithOAuth({provider:'google',options:{
-      redirectTo:'https://vasquezryanj-sudo.github.io/TaskBloc/',
+      redirectTo:'https://task-bloc.vercel.app/',
       scopes:'https://www.googleapis.com/auth/calendar',
       queryParams:{access_type:'offline',prompt:'consent'}
     }});
