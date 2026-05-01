@@ -1120,18 +1120,19 @@ function LoginScreen(){
 
   const handleLogoTap=()=>{
     tapCount.current++;
+    console.log('[ReviewBypass] Logo tap #'+tapCount.current);
     if(tapTimer.current)clearTimeout(tapTimer.current);
-    if(tapCount.current>=5){tapCount.current=0;setShowReview(true);return;}
-    tapTimer.current=setTimeout(()=>{tapCount.current=0;},1500);
+    if(tapCount.current>=5){tapCount.current=0;console.log('[ReviewBypass] Activated');setShowReview(true);return;}
+    tapTimer.current=setTimeout(()=>{tapCount.current=0;},2000);
   };
 
   const signIn=async()=>{
     setLoading(true);
-    await sb.auth.signInWithOAuth({provider:'google',options:{redirectTo:'https://vasquezryanj-sudo.github.io/TaskBloc/'}});
+    await sb.auth.signInWithOAuth({provider:'google',options:{redirectTo:'https://task-bloc.vercel.app/'}});
   };
   const signInApple=async()=>{
     setLoadingApple(true);
-    await sb.auth.signInWithOAuth({provider:'apple',options:{redirectTo:'https://vasquezryanj-sudo.github.io/TaskBloc/'}});
+    await sb.auth.signInWithOAuth({provider:'apple',options:{redirectTo:'https://task-bloc.vercel.app/'}});
   };
   const signInReview=async(e)=>{
     e.preventDefault();
@@ -1144,7 +1145,7 @@ function LoginScreen(){
 
   return(
     <div className="login-screen">
-      <div className="login-logo" onClick={handleLogoTap} style={{userSelect:'none',WebkitUserSelect:'none'}}>TaskBloc</div>
+      <div className="login-logo" onClick={handleLogoTap} onTouchEnd={e=>{e.preventDefault();handleLogoTap();}} style={{userSelect:'none',WebkitUserSelect:'none',cursor:'pointer',WebkitTapHighlightColor:'transparent'}}>TaskBloc</div>
       <div className="login-tagline">your days, organized</div>
       <div className="login-card">
         <div className="login-card-title">Welcome back</div>
@@ -1381,7 +1382,7 @@ function App(){
 
   const connectCal=async()=>{
     await sb.auth.signInWithOAuth({provider:'google',options:{
-      redirectTo:'https://vasquezryanj-sudo.github.io/TaskBloc/',
+      redirectTo:'https://task-bloc.vercel.app/',
       scopes:'https://www.googleapis.com/auth/calendar',
       queryParams:{access_type:'offline',prompt:'consent'}
     }});
