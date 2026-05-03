@@ -248,7 +248,7 @@ body{background-image:radial-gradient(ellipse at 15% 80%,rgba(192,72,32,0.04) 0%
     font-size: 16px !important;
   }
   .sidebar{display:none;}
-  .main{padding:calc(52px + var(--safe-top)) calc(12px + var(--safe-right)) calc(85px + var(--safe-bottom)) calc(12px + var(--safe-left));gap:12px;}
+  .main{padding:calc(12px + var(--safe-top)) calc(12px + var(--safe-right)) calc(85px + var(--safe-bottom)) calc(12px + var(--safe-left));gap:12px;}
   .sync-bar{font-size:8px;padding:0;gap:3px;margin-bottom:-6px;}
   .sync-dot{width:4px;height:4px;}
   .day-block{padding:14px 13px;border-radius:14px;}
@@ -406,13 +406,10 @@ body{background-image:radial-gradient(ellipse at 15% 80%,rgba(192,72,32,0.04) 0%
 .sched-save{margin-top:4px;width:100%;}
 .settings-version{font-size:10px;color:var(--text3);text-align:center;padding:20px;margin-top:auto;font-style:italic;}
 .settings-drag-handle{display:none;}
-.mob-gear{display:none;}
 @media(max-width:680px){
   .settings-drawer{top:auto;right:0;bottom:0;left:0;width:100%;height:85dvh;border-left:none;border-top:1px solid var(--border);border-radius:20px 20px 0 0;animation:settingsSlideUp .3s cubic-bezier(.4,0,.2,1) both;padding-bottom:calc(12px + var(--safe-bottom));}
   @keyframes settingsSlideUp{from{transform:translateY(100%);}to{transform:translateY(0);}}
   .settings-drag-handle{display:block;width:36px;height:4px;border-radius:2px;background:var(--border2);margin:10px auto 0;}
-  .mob-gear{display:flex;position:fixed;top:calc(10px + var(--safe-top));right:calc(12px + var(--safe-right));z-index:99;width:36px;height:36px;align-items:center;justify-content:center;background:rgba(255,253,247,.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid var(--border);border-radius:50%;cursor:pointer;font-size:16px;color:var(--text3);transition:all .2s;box-shadow:0 1px 4px var(--shadow);}
-  .mob-gear:hover{color:var(--text);}
 }
 
 /* ANIMATIONS */
@@ -1587,11 +1584,11 @@ function App(){
       )}
     </div>
 
-    <button className="mob-gear" onClick={()=>setShowSettings(true)} title="Settings">⚙</button>
     <nav className="mob-nav">
       <button className={'mob-btn'+(mobTab==='today'?' active':'')} onClick={()=>setMobTab('today')}><span className="mob-icon">📋</span>Today</button>
       <button className={'mob-btn'+(mobTab==='projects'?' active':'')} onClick={()=>setMobTab('projects')}><span className="mob-icon">📂</span>Projects</button>
       <button className={'mob-btn'+(mobTab==='summary'?' active':'')} onClick={()=>setMobTab('summary')}><span className="mob-icon">📊</span>Summary</button>
+      <button className="mob-btn" onClick={()=>setShowSettings(true)}><span className="mob-icon">⚙️</span>Settings</button>
     </nav>
 
     {editing&&<TaskModal task={editing.task} onClose={()=>setEditing(null)} onSave={u=>{saveTask(editing.dayKey,u);setEditing(null);}} onDelete={()=>delTask(editing.dayKey,editing.task.id)} projects={projects} onCreateProject={createProject}/>}
