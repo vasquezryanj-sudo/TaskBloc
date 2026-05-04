@@ -455,6 +455,30 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 const sb=supabase.createClient(SUPA_URL,SUPA_KEY);
 let currentUserId=null;
 
+/* Native platform detection + Apple Sign In plugin */
+const isNativeIOS=(()=>{
+  try{
+    const native=window.Capacitor&&window.Capacitor.isNativePlatform();
+    const platform=window.Capacitor&&window.Capacitor.getPlatform();
+    console.log('[Auth] Capacitor native:',native,'platform:',platform);
+    return native&&platform==='ios';
+  }catch(e){console.log('[Auth] Capacitor detection failed:',e);return false;}
+})();
+
+const getAppleSignInPlugin=async()=>{
+  try{
+    if(!window.Capacitor||!window.Capacitor.Plugins||!window.Capacitor.Plugins.AppleSignIn){
+      console.log('[Auth] AppleSignIn plugin not available on Capacitor bridge');
+      return null;
+    }
+    console.log('[Auth] AppleSignIn plugin found on Capacitor bridge');
+    return window.Capacitor.Plugins.AppleSignIn;
+  }catch(e){
+    console.error('[Auth] Failed to load AppleSignIn plugin:',e);
+    return null;
+  }
+};
+
 const next8=()=>Array.from({length:8},(_,i)=>{const d=new Date();d.setDate(d.getDate()+i);return d;});
 const dk=d=>d.getFullYear()+'-'+d.getMonth()+'-'+d.getDate();
 const estNow=()=>new Date(new Date().toLocaleString('en-US',{timeZone:'America/New_York'}));
@@ -550,11 +574,11 @@ const tagName=t=>typeof t==='string'?t:(t&&t.label)||'';
 
 function Attachments({attachments,onChange}){
   const [over,setOver]=useState(false);
-  const addFiles=fs=>{const n=Array.from(fs).map(f=>({id:uid(),name:f.name,size:f.size,type:'file',url:null}));onChange([...attachments,...n]);};
+  const addFiles=fs=>{try{const n=Array.from(fs).map(f=>({id:uid(),name:f.name,size:f.size,type:'file',url:null}));onChange([...attachments,...n]);}catch(e){console.error('[Attachments] addFiles error:',e);}};
   const remove=id=>onChange(attachments.filter(a=>a.id!==id));
   return(<div style={{display:'flex',flexDirection:'column',gap:'9px'}}>
     <div className={'file-drop'+(over?' over':'')} onDragOver={e=>{e.preventDefault();setOver(true);}} onDragLeave={()=>setOver(false)} onDrop={e=>{e.preventDefault();setOver(false);addFiles(e.dataTransfer.files);}}>
-      <input type="file" multiple onChange={e=>addFiles(e.target.files)}/><span className="file-drop-icon">📁</span><span className="file-drop-label">Drop files or tap to browse</span><span className="file-drop-sub">· Syncs once storage connected</span>
+      <input type="file" multiple accept="image/*,.pdf,.doc,.docx,.txt" onChange={e=>addFiles(e.target.files)}/><span className="file-drop-icon">📁</span><span className="file-drop-label">Drop files or tap to browse</span><span className="file-drop-sub">· Syncs once storage connected</span>
     </div>
     {attachments.length>0&&<div className="attach-list">{attachments.map(a=>{const{icon,cls}=fIcon(a.name);return(<div key={a.id} className="attach-item"><div className={'a-icon '+cls}>{icon}</div><div className="a-info"><div className="a-name">{a.name}</div><div className="a-meta">{fmtSize(a.size)+' · pending'}</div></div><button className="a-remove" onClick={()=>remove(a.id)}>✕</button></div>);})}</div>}
   </div>);
@@ -1133,6 +1157,26 @@ function LoginScreen(){
   };
   const signInApple=async()=>{
     setLoadingApple(true);
+    if(isNativeIOS){
+      console.log('[Auth] Attempting native Apple Sign In');
+      try{
+        const plugin=await getAppleSignInPlugin();
+        if(plugin){
+          const result=await plugin.signIn({scopes:['EMAIL','FULL_NAME']});
+          console.log('[Auth] Native Apple Sign In succeeded, got idToken:',!!result.idToken);
+          const{data,error}=await sb.auth.signInWithIdToken({provider:'apple',token:result.idToken});
+          if(error){console.error('[Auth] Supabase signInWithIdToken error:',error);setLoadingApple(false);return;}
+          console.log('[Auth] Supabase session established via native Apple Sign In');
+          return;
+        }
+        console.log('[Auth] Plugin unavailable, falling back to OAuth');
+      }catch(e){
+        console.error('[Auth] Native Apple Sign In failed:',e);
+        setLoadingApple(false);
+        return;
+      }
+    }
+    console.log('[Auth] Using web OAuth for Apple Sign In');
     await sb.auth.signInWithOAuth({provider:'apple',options:{redirectTo:'https://task-bloc.vercel.app/'}});
   };
   const signInReview=async(e)=>{

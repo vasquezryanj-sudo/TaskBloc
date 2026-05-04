@@ -45,5 +45,13 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>TaskBloc uses your camera to take photos for task attachments.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>TaskBloc accesses your photo library to attach images to tasks.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>TaskBloc saves images from tasks to your photo library.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>TaskBloc uses the microphone when recording video for task attachments.</string>
 </dict>
 </plist>
