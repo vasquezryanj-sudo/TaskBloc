@@ -1171,25 +1171,11 @@ function LoginScreen(){
 
   const signIn=async()=>{
     setLoading(true);
-    if(isNative){
-      console.log('[Auth] Attempting native Google Sign In');
-      try{
-        const plugin=getCapPlugin('GoogleSignIn');
-        if(plugin){
-          const result=await plugin.signIn();
-          console.log('[Auth] Native Google Sign In succeeded, got idToken:',!!result.idToken);
-          const{data,error}=await sb.auth.signInWithIdToken({provider:'google',token:result.idToken});
-          if(error){console.error('[Auth] Supabase signInWithIdToken (google) error:',JSON.stringify({message:error.message,status:error.status,code:error.code,name:error.name,details:error.details,hint:error.hint,full:error}));setLoading(false);return;}
-          console.log('[Auth] Supabase session established via native Google Sign In');
-          return;
-        }
-        console.log('[Auth] GoogleSignIn plugin unavailable, falling back to OAuth');
-      }catch(e){
-        console.error('[Auth] Native Google Sign In failed:',JSON.stringify({message:e.message,code:e.code,status:e.status,name:e.name,stack:e.stack}));
-        setLoading(false);
-        return;
-      }
-    }
+    /* Google Sign In always uses web OAuth (even on native iOS).
+       The @capawesome/capacitor-google-sign-in plugin doesn't expose nonce
+       control on iOS — the SDK embeds an internal nonce we can't provide
+       to Supabase as plaintext, causing "nonce mismatch" errors.
+       Apple only requires native flow for Apple Sign In, not Google. */
     console.log('[Auth] Using web OAuth for Google Sign In');
     await sb.auth.signInWithOAuth({provider:'google',options:{redirectTo:'https://task-bloc.vercel.app/'}});
   };
