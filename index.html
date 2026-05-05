@@ -455,29 +455,47 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 const sb=supabase.createClient(SUPA_URL,SUPA_KEY);
 let currentUserId=null;
 
-/* Native platform detection + Apple Sign In plugin */
-const isNativeIOS=(()=>{
+/* Native platform detection + Sign In plugins */
+const capPlatform=(()=>{
   try{
     const native=window.Capacitor&&window.Capacitor.isNativePlatform();
     const platform=window.Capacitor&&window.Capacitor.getPlatform();
     console.log('[Auth] Capacitor native:',native,'platform:',platform);
-    return native&&platform==='ios';
-  }catch(e){console.log('[Auth] Capacitor detection failed:',e);return false;}
+    return {native:!!native,platform:platform||'web'};
+  }catch(e){console.log('[Auth] Capacitor detection failed:',e);return {native:false,platform:'web'};}
 })();
+const isNativeIOS=capPlatform.native&&capPlatform.platform==='ios';
+const isNativeAndroid=capPlatform.native&&capPlatform.platform==='android';
+const isNative=capPlatform.native;
 
-const getAppleSignInPlugin=async()=>{
+const getCapPlugin=(name)=>{
   try{
-    if(!window.Capacitor||!window.Capacitor.Plugins||!window.Capacitor.Plugins.AppleSignIn){
-      console.log('[Auth] AppleSignIn plugin not available on Capacitor bridge');
+    if(!window.Capacitor||!window.Capacitor.Plugins||!window.Capacitor.Plugins[name]){
+      console.log('[Auth] '+name+' plugin not available on Capacitor bridge');
       return null;
     }
-    console.log('[Auth] AppleSignIn plugin found on Capacitor bridge');
-    return window.Capacitor.Plugins.AppleSignIn;
+    console.log('[Auth] '+name+' plugin found on Capacitor bridge');
+    return window.Capacitor.Plugins[name];
   }catch(e){
-    console.error('[Auth] Failed to load AppleSignIn plugin:',e);
+    console.error('[Auth] Failed to get '+name+' plugin:',e);
     return null;
   }
 };
+
+/* Google Sign In - initialize on native platforms */
+const GOOGLE_WEB_CLIENT_ID='YOUR_GOOGLE_WEB_CLIENT_ID';
+const initGoogleSignIn=async()=>{
+  if(!isNative)return;
+  const plugin=getCapPlugin('GoogleSignIn');
+  if(!plugin)return;
+  try{
+    await plugin.initialize({clientId:GOOGLE_WEB_CLIENT_ID});
+    console.log('[Auth] GoogleSignIn plugin initialized');
+  }catch(e){
+    console.error('[Auth] GoogleSignIn initialize failed:',e);
+  }
+};
+initGoogleSignIn();
 
 const next8=()=>Array.from({length:8},(_,i)=>{const d=new Date();d.setDate(d.getDate()+i);return d;});
 const dk=d=>d.getFullYear()+'-'+d.getMonth()+'-'+d.getDate();
@@ -1153,6 +1171,26 @@ function LoginScreen(){
 
   const signIn=async()=>{
     setLoading(true);
+    if(isNative){
+      console.log('[Auth] Attempting native Google Sign In');
+      try{
+        const plugin=getCapPlugin('GoogleSignIn');
+        if(plugin){
+          const result=await plugin.signIn();
+          console.log('[Auth] Native Google Sign In succeeded, got idToken:',!!result.idToken);
+          const{data,error}=await sb.auth.signInWithIdToken({provider:'google',token:result.idToken});
+          if(error){console.error('[Auth] Supabase signInWithIdToken (google) error:',error);setLoading(false);return;}
+          console.log('[Auth] Supabase session established via native Google Sign In');
+          return;
+        }
+        console.log('[Auth] GoogleSignIn plugin unavailable, falling back to OAuth');
+      }catch(e){
+        console.error('[Auth] Native Google Sign In failed:',e);
+        setLoading(false);
+        return;
+      }
+    }
+    console.log('[Auth] Using web OAuth for Google Sign In');
     await sb.auth.signInWithOAuth({provider:'google',options:{redirectTo:'https://task-bloc.vercel.app/'}});
   };
   const signInApple=async()=>{
@@ -1160,16 +1198,16 @@ function LoginScreen(){
     if(isNativeIOS){
       console.log('[Auth] Attempting native Apple Sign In');
       try{
-        const plugin=await getAppleSignInPlugin();
+        const plugin=getCapPlugin('AppleSignIn');
         if(plugin){
           const result=await plugin.signIn({scopes:['EMAIL','FULL_NAME']});
           console.log('[Auth] Native Apple Sign In succeeded, got idToken:',!!result.idToken);
           const{data,error}=await sb.auth.signInWithIdToken({provider:'apple',token:result.idToken});
-          if(error){console.error('[Auth] Supabase signInWithIdToken error:',error);setLoadingApple(false);return;}
+          if(error){console.error('[Auth] Supabase signInWithIdToken (apple) error:',error);setLoadingApple(false);return;}
           console.log('[Auth] Supabase session established via native Apple Sign In');
           return;
         }
-        console.log('[Auth] Plugin unavailable, falling back to OAuth');
+        console.log('[Auth] AppleSignIn plugin unavailable, falling back to OAuth');
       }catch(e){
         console.error('[Auth] Native Apple Sign In failed:',e);
         setLoadingApple(false);

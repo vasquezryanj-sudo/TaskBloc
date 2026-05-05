@@ -455,29 +455,47 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 const sb=supabase.createClient(SUPA_URL,SUPA_KEY);
 let currentUserId=null;
 
-/* Native platform detection + Apple Sign In plugin */
-const isNativeIOS=(()=>{
+/* Native platform detection + Sign In plugins */
+const capPlatform=(()=>{
   try{
     const native=window.Capacitor&&window.Capacitor.isNativePlatform();
     const platform=window.Capacitor&&window.Capacitor.getPlatform();
     console.log('[Auth] Capacitor native:',native,'platform:',platform);
-    return native&&platform==='ios';
-  }catch(e){console.log('[Auth] Capacitor detection failed:',e);return false;}
+    return {native:!!native,platform:platform||'web'};
+  }catch(e){console.log('[Auth] Capacitor detection failed:',e);return {native:false,platform:'web'};}
 })();
+const isNativeIOS=capPlatform.native&&capPlatform.platform==='ios';
+const isNativeAndroid=capPlatform.native&&capPlatform.platform==='android';
+const isNative=capPlatform.native;
 
-const getAppleSignInPlugin=async()=>{
+const getCapPlugin=(name)=>{
   try{
-    if(!window.Capacitor||!window.Capacitor.Plugins||!window.Capacitor.Plugins.AppleSignIn){
-      console.log('[Auth] AppleSignIn plugin not available on Capacitor bridge');
+    if(!window.Capacitor||!window.Capacitor.Plugins||!window.Capacitor.Plugins[name]){
+      console.log('[Auth] '+name+' plugin not available on Capacitor bridge');
       return null;
     }
-    console.log('[Auth] AppleSignIn plugin found on Capacitor bridge');
-    return window.Capacitor.Plugins.AppleSignIn;
+    console.log('[Auth] '+name+' plugin found on Capacitor bridge');
+    return window.Capacitor.Plugins[name];
   }catch(e){
-    console.error('[Auth] Failed to load AppleSignIn plugin:',e);
+    console.error('[Auth] Failed to get '+name+' plugin:',e);
     return null;
   }
 };
+
+/* Google Sign In - initialize on native platforms */
+const GOOGLE_WEB_CLIENT_ID='YOUR_GOOGLE_WEB_CLIENT_ID';
+const initGoogleSignIn=async()=>{
+  if(!isNative)return;
+  const plugin=getCapPlugin('GoogleSignIn');
+  if(!plugin)return;
+  try{
+    await plugin.initialize({clientId:GOOGLE_WEB_CLIENT_ID});
+    console.log('[Auth] GoogleSignIn plugin initialized');
+  }catch(e){
+    console.error('[Auth] GoogleSignIn initialize failed:',e);
+  }
+};
+initGoogleSignIn();
 
 const next8=()=>Array.from({length:8},(_,i)=>{const d=new Date();d.setDate(d.getDate()+i);return d;});
 const dk=d=>d.getFullYear()+'-'+d.getMonth()+'-'+d.getDate();
@@ -742,7 +760,8 @@ function DayBlock({date,tasks,isToday,onAdd,onToggle,onOpen,onUpdateTasks,onMove
       <div className="add-row"><input className="add-input" placeholder="Add a task…" value={newName} onChange={e=>setNewName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&add()}/><button className="btn primary" onClick={add}>Add</button></div>
       <div className="task-list-wrap">
         {tasks.length===0&&<div style={{textAlign:'center',padding:'18px 10px'}}><div style={{fontFamily:"'Fraunces',serif",fontSize:'14px',color:'var(--text3)',fontStyle:'italic',lineHeight:'1.6'}}>Nothing on the list yet.</div><div style={{fontSize:'11px',color:'var(--text3)',marginTop:'4px'}}>Add something to get started.</div></div>}
-        {inc.map(t=><TaskItem key={t.id} task={t} onToggle={id=>onToggle(key,id)} onOpen={onOpen} onDragStart={hDragStart} onDragEnd={hDragEnd} onDragOver={setDragOver} onDrop={hDrop} isDragging={draggingId===t.id} isDragOver={dragOver===t.id} projects={projects}/>)}
+        {inc.slice(0,3).map(t=><TaskItem key={t.id} task={t} onToggle={id=>onToggle(key,id)} onOpen={onOpen} onDragStart={hDragStart} onDragEnd={hDragEnd} onDragOver={setDragOver} onDrop={hDrop} isDragging={draggingId===t.id} isDragOver={dragOver===t.id} projects={projects}/>)}
+        {inc.length>3&&<div style={{textAlign:'center',padding:'8px 0',fontSize:'13px',color:'var(--text3)',fontStyle:'italic'}}>+{inc.length-3} more</div>}
       </div>
       {tasks.length>0&&<div className={'drop-zone-hint'+(zoneActive?' active':'')} onDragOver={e=>{e.preventDefault();setZoneActive(true);}} onDragLeave={()=>setZoneActive(false)} onDrop={hZoneDrop}>drag a task here from another day</div>}
     </div>
@@ -1153,6 +1172,26 @@ function LoginScreen(){
 
   const signIn=async()=>{
     setLoading(true);
+    if(isNative){
+      console.log('[Auth] Attempting native Google Sign In');
+      try{
+        const plugin=getCapPlugin('GoogleSignIn');
+        if(plugin){
+          const result=await plugin.signIn();
+          console.log('[Auth] Native Google Sign In succeeded, got idToken:',!!result.idToken);
+          const{data,error}=await sb.auth.signInWithIdToken({provider:'google',token:result.idToken});
+          if(error){console.error('[Auth] Supabase signInWithIdToken (google) error:',error);setLoading(false);return;}
+          console.log('[Auth] Supabase session established via native Google Sign In');
+          return;
+        }
+        console.log('[Auth] GoogleSignIn plugin unavailable, falling back to OAuth');
+      }catch(e){
+        console.error('[Auth] Native Google Sign In failed:',e);
+        setLoading(false);
+        return;
+      }
+    }
+    console.log('[Auth] Using web OAuth for Google Sign In');
     await sb.auth.signInWithOAuth({provider:'google',options:{redirectTo:'https://task-bloc.vercel.app/'}});
   };
   const signInApple=async()=>{
@@ -1160,16 +1199,16 @@ function LoginScreen(){
     if(isNativeIOS){
       console.log('[Auth] Attempting native Apple Sign In');
       try{
-        const plugin=await getAppleSignInPlugin();
+        const plugin=getCapPlugin('AppleSignIn');
         if(plugin){
           const result=await plugin.signIn({scopes:['EMAIL','FULL_NAME']});
           console.log('[Auth] Native Apple Sign In succeeded, got idToken:',!!result.idToken);
           const{data,error}=await sb.auth.signInWithIdToken({provider:'apple',token:result.idToken});
-          if(error){console.error('[Auth] Supabase signInWithIdToken error:',error);setLoadingApple(false);return;}
+          if(error){console.error('[Auth] Supabase signInWithIdToken (apple) error:',error);setLoadingApple(false);return;}
           console.log('[Auth] Supabase session established via native Apple Sign In');
           return;
         }
-        console.log('[Auth] Plugin unavailable, falling back to OAuth');
+        console.log('[Auth] AppleSignIn plugin unavailable, falling back to OAuth');
       }catch(e){
         console.error('[Auth] Native Apple Sign In failed:',e);
         setLoadingApple(false);
@@ -1575,7 +1614,7 @@ function App(){
         onDragLeave={e=>e.currentTarget.classList.remove('drop-target')}
         onDrop={e=>{e.preventDefault();e.currentTarget.classList.remove('drop-target');const tid=e.dataTransfer.getData('taskId'),fd=e.dataTransfer.getData('fromDay'),k0=dk(days[0]);if(fd==='forward')moveFwdToDay(tid,k0);else if(fd&&fd!==k0)movTask(fd,k0,tid);}}>
         <div className="week-card-header"><div><div className="week-day-name">Today</div><div className="week-day-month">{MS[days[0].getMonth()]}</div></div><div className="week-day-num">{days[0].getDate()}</div></div>
-        {(tasks[dk(days[0])]||[]).filter(t=>!t.complete).length===0?<div className="week-empty">{(tasks[dk(days[0])]||[]).length>0?'all done':'nothing yet'}</div>:(tasks[dk(days[0])]||[]).filter(t=>!t.complete).map(t=><div key={t.id} className="week-pill"><span className="week-pill-dot"/>{t.name}</div>)}
+        {(()=>{const inc0=(tasks[dk(days[0])]||[]).filter(t=>!t.complete);return inc0.length===0?<div className="week-empty">{(tasks[dk(days[0])]||[]).length>0?'all done':'nothing yet'}</div>:<>{inc0.slice(0,2).map(t=><div key={t.id} className="week-pill"><span className="week-pill-dot"/>{t.name}</div>)}{inc0.length>2&&<div style={{fontSize:'12px',color:'var(--text3)',padding:'2px 8px',fontStyle:'italic'}}>+{inc0.length-2} more</div>}</>})()}
       </div>
       {days.slice(1).map((d,i)=>{const k=dk(d),dt=tasks[k]||[];return(
         <div key={k} className={'week-card'+(sel===i+1?' is-today':'')} onClick={()=>selectDay(i+1)}
