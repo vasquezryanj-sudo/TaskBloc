@@ -1171,11 +1171,39 @@ function LoginScreen(){
 
   const signIn=async()=>{
     setLoading(true);
-    /* Google Sign In always uses web OAuth (even on native iOS).
-       The @capawesome/capacitor-google-sign-in plugin doesn't expose nonce
-       control on iOS — the SDK embeds an internal nonce we can't provide
-       to Supabase as plaintext, causing "nonce mismatch" errors.
-       Apple only requires native flow for Apple Sign In, not Google. */
+    if(isNative){
+      console.log('[Auth] Attempting native Google Sign In');
+      try{
+        const plugin=getCapPlugin('GoogleSignIn');
+        if(plugin){
+          const result=await plugin.signIn();
+          console.log('[Auth] Native Google Sign In succeeded, got idToken:',!!result.idToken);
+          /* Decode JWT to inspect nonce claim */
+          let tokenNonce;
+          try{
+            const payload=JSON.parse(atob(result.idToken.split('.')[1]));
+            tokenNonce=payload.nonce;
+            console.log('[Auth] Google idToken aud:',payload.aud);
+            console.log('[Auth] Google idToken nonce:',tokenNonce);
+          }catch(decErr){console.error('[Auth] Failed to decode idToken:',decErr);}
+          /* If token has nonce, we cannot match it — SDK generates internally.
+             Log everything so we can diagnose. */
+          console.log('[Auth] Calling signInWithIdToken WITHOUT nonce param');
+          const{data,error}=await sb.auth.signInWithIdToken({provider:'google',token:result.idToken});
+          if(error){
+            console.error('[Auth] Supabase signInWithIdToken (google) error:',JSON.stringify({message:error.message,status:error.status,code:error.code}));
+            console.error('[Auth] Token had nonce:',!!tokenNonce,'nonce value:',tokenNonce);
+            setLoading(false);return;
+          }
+          console.log('[Auth] Supabase session established via native Google Sign In');
+          return;
+        }
+        console.log('[Auth] GoogleSignIn plugin unavailable, falling back to OAuth');
+      }catch(e){
+        console.error('[Auth] Native Google Sign In failed:',e.message);
+        setLoading(false);return;
+      }
+    }
     console.log('[Auth] Using web OAuth for Google Sign In');
     await sb.auth.signInWithOAuth({provider:'google',options:{redirectTo:'https://task-bloc.vercel.app/'}});
   };
