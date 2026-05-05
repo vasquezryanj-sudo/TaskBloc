@@ -1178,28 +1178,7 @@ function LoginScreen(){
         if(plugin){
           const result=await plugin.signIn();
           console.log('[Auth] Native Google Sign In succeeded, got idToken:',!!result.idToken);
-          console.log('[Auth] Google signIn result keys:',Object.keys(result));
-          /* Decode and log full JWT payload */
-          const idToken=result.idToken;
-          let tokenNonce;
-          try{
-            const payload=JSON.parse(atob(idToken.split('.')[1]));
-            console.log('[Auth] idToken nonce claim:',payload.nonce);
-            console.log('[Auth] idToken aud claim:',payload.aud);
-            console.log('[Auth] idToken full payload:',JSON.stringify(payload));
-            tokenNonce=payload.nonce;
-          }catch(decErr){
-            console.error('[Auth] Failed to decode idToken payload:',decErr);
-          }
-          const idTokenOpts={provider:'google',token:idToken};
-          if(tokenNonce){
-            idTokenOpts.nonce=tokenNonce;
-            console.log('[Auth] Passing nonce to Supabase:',tokenNonce);
-          }else{
-            console.log('[Auth] No nonce in idToken, calling without nonce');
-          }
-          console.log('[Auth] signInWithIdToken opts:',JSON.stringify({provider:idTokenOpts.provider,hasToken:!!idTokenOpts.token,nonce:idTokenOpts.nonce||'none'}));
-          const{data,error}=await sb.auth.signInWithIdToken(idTokenOpts);
+          const{data,error}=await sb.auth.signInWithIdToken({provider:'google',token:result.idToken});
           if(error){console.error('[Auth] Supabase signInWithIdToken (google) error:',JSON.stringify({message:error.message,status:error.status,code:error.code,name:error.name,details:error.details,hint:error.hint,full:error}));setLoading(false);return;}
           console.log('[Auth] Supabase session established via native Google Sign In');
           return;
