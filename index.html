@@ -1180,6 +1180,7 @@ function LoginScreen(){
           console.log('[Auth] Native Google Sign In succeeded, got idToken:',!!result.idToken);
           console.log('[Auth] Google idToken (first 50 chars):',result.idToken?result.idToken.substring(0,50)+'...':'null');
           console.log('[Auth] Google signIn result keys:',Object.keys(result));
+          console.log('[Auth] TEMP full Google idToken:',result.idToken);
           const{data,error}=await sb.auth.signInWithIdToken({provider:'google',token:result.idToken});
           if(error){console.error('[Auth] Supabase signInWithIdToken (google) error:',JSON.stringify({message:error.message,status:error.status,code:error.code,name:error.name,details:error.details,hint:error.hint,full:error}));setLoading(false);return;}
           console.log('[Auth] Supabase session established via native Google Sign In');
