@@ -77,7 +77,7 @@ body{background-image:radial-gradient(ellipse at 15% 80%,rgba(192,72,32,0.04) 0%
 .done-bubble-close:hover{color:var(--accent);}
 
 /* TASK LIST - scrollable */
-.task-list-wrap{overflow-y:auto;max-height:calc(4 * 58px - 8px);display:flex;flex-direction:column;gap:6px;padding:4px 4px;}
+.task-list-wrap{overflow-y:auto;max-height:calc(3 * 58px - 8px);display:flex;flex-direction:column;gap:6px;padding:4px 4px;}
 .task-list-wrap{scrollbar-gutter:stable;}
 .task-list-wrap::-webkit-scrollbar{width:2px;}
 .task-list-wrap::-webkit-scrollbar-thumb{background:rgba(197,180,154,0.4);border-radius:10px;}
@@ -1613,7 +1613,7 @@ function App(){
         onDragLeave={e=>e.currentTarget.classList.remove('drop-target')}
         onDrop={e=>{e.preventDefault();e.currentTarget.classList.remove('drop-target');const tid=e.dataTransfer.getData('taskId'),fd=e.dataTransfer.getData('fromDay'),k0=dk(days[0]);if(fd==='forward')moveFwdToDay(tid,k0);else if(fd&&fd!==k0)movTask(fd,k0,tid);}}>
         <div className="week-card-header"><div><div className="week-day-name">Today</div><div className="week-day-month">{MS[days[0].getMonth()]}</div></div><div className="week-day-num">{days[0].getDate()}</div></div>
-        {(tasks[dk(days[0])]||[]).filter(t=>!t.complete).length===0?<div className="week-empty">{(tasks[dk(days[0])]||[]).length>0?'all done':'nothing yet'}</div>:(tasks[dk(days[0])]||[]).filter(t=>!t.complete).map(t=><div key={t.id} className="week-pill"><span className="week-pill-dot"/>{t.name}</div>)}
+        {(()=>{const inc0=(tasks[dk(days[0])]||[]).filter(t=>!t.complete);return inc0.length===0?<div className="week-empty">{(tasks[dk(days[0])]||[]).length>0?'all done':'nothing yet'}</div>:<>{inc0.slice(0,2).map(t=><div key={t.id} className="week-pill"><span className="week-pill-dot"/>{t.name}</div>)}{inc0.length>2&&<div style={{fontSize:'12px',color:'var(--text3)',padding:'2px 8px',fontStyle:'italic'}}>+{inc0.length-2} more</div>}</>})()}
       </div>
       {days.slice(1).map((d,i)=>{const k=dk(d),dt=tasks[k]||[];return(
         <div key={k} className={'week-card'+(sel===i+1?' is-today':'')} onClick={()=>selectDay(i+1)}
@@ -1621,7 +1621,7 @@ function App(){
           onDragLeave={e=>e.currentTarget.classList.remove('drop-target')}
           onDrop={e=>{e.preventDefault();e.currentTarget.classList.remove('drop-target');const tid=e.dataTransfer.getData('taskId'),fd=e.dataTransfer.getData('fromDay');if(fd==='forward')moveFwdToDay(tid,k);else if(fd&&fd!==k)movTask(fd,k,tid);}}>
           <div className="week-card-header"><div><div className="week-day-name">{DAYS[d.getDay()]}</div><div className="week-day-month">{MS[d.getMonth()]}</div></div><div className="week-day-num">{d.getDate()}</div></div>
-          {dt.filter(t=>!t.complete).length===0?<div className="week-empty">{dt.length>0?'all done':'nothing yet'}</div>:dt.filter(t=>!t.complete).map(t=><div key={t.id} className="week-pill"><span className="week-pill-dot"/>{t.name}</div>)}
+          {(()=>{const incD=dt.filter(t=>!t.complete);return incD.length===0?<div className="week-empty">{dt.length>0?'all done':'nothing yet'}</div>:<>{incD.slice(0,2).map(t=><div key={t.id} className="week-pill"><span className="week-pill-dot"/>{t.name}</div>)}{incD.length>2&&<div style={{fontSize:'12px',color:'var(--text3)',padding:'2px 8px',fontStyle:'italic'}}>+{incD.length-2} more</div>}</>})()}
         </div>
       );})}
     </div>

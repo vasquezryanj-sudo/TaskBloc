@@ -77,7 +77,7 @@ body{background-image:radial-gradient(ellipse at 15% 80%,rgba(192,72,32,0.04) 0%
 .done-bubble-close:hover{color:var(--accent);}
 
 /* TASK LIST - scrollable */
-.task-list-wrap{overflow-y:auto;max-height:calc(4 * 58px - 8px);display:flex;flex-direction:column;gap:6px;padding:4px 4px;}
+.task-list-wrap{overflow-y:auto;max-height:calc(3 * 58px - 8px);display:flex;flex-direction:column;gap:6px;padding:4px 4px;}
 .task-list-wrap{scrollbar-gutter:stable;}
 .task-list-wrap::-webkit-scrollbar{width:2px;}
 .task-list-wrap::-webkit-scrollbar-thumb{background:rgba(197,180,154,0.4);border-radius:10px;}
@@ -760,8 +760,7 @@ function DayBlock({date,tasks,isToday,onAdd,onToggle,onOpen,onUpdateTasks,onMove
       <div className="add-row"><input className="add-input" placeholder="Add a task…" value={newName} onChange={e=>setNewName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&add()}/><button className="btn primary" onClick={add}>Add</button></div>
       <div className="task-list-wrap">
         {tasks.length===0&&<div style={{textAlign:'center',padding:'18px 10px'}}><div style={{fontFamily:"'Fraunces',serif",fontSize:'14px',color:'var(--text3)',fontStyle:'italic',lineHeight:'1.6'}}>Nothing on the list yet.</div><div style={{fontSize:'11px',color:'var(--text3)',marginTop:'4px'}}>Add something to get started.</div></div>}
-        {inc.slice(0,3).map(t=><TaskItem key={t.id} task={t} onToggle={id=>onToggle(key,id)} onOpen={onOpen} onDragStart={hDragStart} onDragEnd={hDragEnd} onDragOver={setDragOver} onDrop={hDrop} isDragging={draggingId===t.id} isDragOver={dragOver===t.id} projects={projects}/>)}
-        {inc.length>3&&<div style={{textAlign:'center',padding:'8px 0',fontSize:'13px',color:'var(--text3)',fontStyle:'italic'}}>+{inc.length-3} more</div>}
+        {inc.map(t=><TaskItem key={t.id} task={t} onToggle={id=>onToggle(key,id)} onOpen={onOpen} onDragStart={hDragStart} onDragEnd={hDragEnd} onDragOver={setDragOver} onDrop={hDrop} isDragging={draggingId===t.id} isDragOver={dragOver===t.id} projects={projects}/>)}
       </div>
       {tasks.length>0&&<div className={'drop-zone-hint'+(zoneActive?' active':'')} onDragOver={e=>{e.preventDefault();setZoneActive(true);}} onDragLeave={()=>setZoneActive(false)} onDrop={hZoneDrop}>drag a task here from another day</div>}
     </div>
@@ -1622,7 +1621,7 @@ function App(){
           onDragLeave={e=>e.currentTarget.classList.remove('drop-target')}
           onDrop={e=>{e.preventDefault();e.currentTarget.classList.remove('drop-target');const tid=e.dataTransfer.getData('taskId'),fd=e.dataTransfer.getData('fromDay');if(fd==='forward')moveFwdToDay(tid,k);else if(fd&&fd!==k)movTask(fd,k,tid);}}>
           <div className="week-card-header"><div><div className="week-day-name">{DAYS[d.getDay()]}</div><div className="week-day-month">{MS[d.getMonth()]}</div></div><div className="week-day-num">{d.getDate()}</div></div>
-          {dt.filter(t=>!t.complete).length===0?<div className="week-empty">{dt.length>0?'all done':'nothing yet'}</div>:dt.filter(t=>!t.complete).map(t=><div key={t.id} className="week-pill"><span className="week-pill-dot"/>{t.name}</div>)}
+          {(()=>{const incD=dt.filter(t=>!t.complete);return incD.length===0?<div className="week-empty">{dt.length>0?'all done':'nothing yet'}</div>:<>{incD.slice(0,2).map(t=><div key={t.id} className="week-pill"><span className="week-pill-dot"/>{t.name}</div>)}{incD.length>2&&<div style={{fontSize:'12px',color:'var(--text3)',padding:'2px 8px',fontStyle:'italic'}}>+{incD.length-2} more</div>}</>})()}
         </div>
       );})}
     </div>
