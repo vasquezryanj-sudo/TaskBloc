@@ -1178,9 +1178,27 @@ function LoginScreen(){
         if(plugin){
           const result=await plugin.signIn();
           console.log('[Auth] Native Google Sign In succeeded, got idToken:',!!result.idToken);
-          console.log('[Auth] Nonce plaintext from plugin:',result.nonce||'none');
+          /* Compare nonce plaintext vs what's in the token */
+          const noncePlaintext=result.nonce;
+          let tokenNonce;
+          try{const p=JSON.parse(atob(result.idToken.split('.')[1]));tokenNonce=p.nonce;}catch(e){}
+          console.log('[Auth] Nonce plaintext from plugin:',noncePlaintext);
+          console.log('[Auth] Nonce in idToken (hash):',tokenNonce);
+          console.log('[Auth] Are they identical:',noncePlaintext===tokenNonce);
+          /* Compute SHA-256 of plaintext to see if it matches token nonce */
+          let sha256hex;
+          if(noncePlaintext){
+            try{
+              const enc=new TextEncoder().encode(noncePlaintext);
+              const hashBuf=await crypto.subtle.digest('SHA-256',enc);
+              sha256hex=Array.from(new Uint8Array(hashBuf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+              console.log('[Auth] SHA-256(plaintext):',sha256hex);
+              console.log('[Auth] SHA-256 matches token nonce:',sha256hex===tokenNonce);
+            }catch(e){console.error('[Auth] SHA-256 computation failed:',e);}
+          }
+          /* Pass plaintext to Supabase — it should hash internally */
           const opts={provider:'google',token:result.idToken};
-          if(result.nonce){opts.nonce=result.nonce;console.log('[Auth] Passing nonce plaintext to Supabase');}
+          if(noncePlaintext){opts.nonce=noncePlaintext;console.log('[Auth] Passing plaintext nonce to Supabase');}
           const{data,error}=await sb.auth.signInWithIdToken(opts);
           if(error){
             console.error('[Auth] Supabase signInWithIdToken (google) error:',JSON.stringify({message:error.message,status:error.status,code:error.code}));
