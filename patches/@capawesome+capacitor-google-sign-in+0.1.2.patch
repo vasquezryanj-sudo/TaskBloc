@@ -1,0 +1,71 @@
+diff --git a/node_modules/@capawesome/capacitor-google-sign-in/ios/Plugin/Classes/Results/SignInResult.swift b/node_modules/@capawesome/capacitor-google-sign-in/ios/Plugin/Classes/Results/SignInResult.swift
+index b7725cf..385cac0 100644
+--- a/node_modules/@capawesome/capacitor-google-sign-in/ios/Plugin/Classes/Results/SignInResult.swift
++++ b/node_modules/@capawesome/capacitor-google-sign-in/ios/Plugin/Classes/Results/SignInResult.swift
+@@ -11,6 +11,7 @@ import Capacitor
+     let imageUrl: String?
+     let accessToken: String?
+     let serverAuthCode: String?
++    let nonce: String?
+ 
+     init(
+         idToken: String,
+@@ -21,7 +22,8 @@ import Capacitor
+         familyName: String?,
+         imageUrl: String?,
+         accessToken: String?,
+-        serverAuthCode: String?
++        serverAuthCode: String?,
++        nonce: String?
+     ) {
+         self.idToken = idToken
+         self.userId = userId
+@@ -32,6 +34,7 @@ import Capacitor
+         self.imageUrl = imageUrl
+         self.accessToken = accessToken
+         self.serverAuthCode = serverAuthCode
++        self.nonce = nonce
+     }
+ 
+     @objc public func toJSObject() -> AnyObject {
+@@ -45,6 +48,7 @@ import Capacitor
+         result["imageUrl"] = imageUrl == nil ? NSNull() : imageUrl
+         result["accessToken"] = accessToken == nil ? NSNull() : accessToken
+         result["serverAuthCode"] = serverAuthCode == nil ? NSNull() : serverAuthCode
++        result["nonce"] = nonce == nil ? NSNull() : nonce
+         return result as AnyObject
+     }
+ }
+diff --git a/node_modules/@capawesome/capacitor-google-sign-in/ios/Plugin/GoogleSignIn.swift b/node_modules/@capawesome/capacitor-google-sign-in/ios/Plugin/GoogleSignIn.swift
+index b5b0745..462c554 100644
+--- a/node_modules/@capawesome/capacitor-google-sign-in/ios/Plugin/GoogleSignIn.swift
++++ b/node_modules/@capawesome/capacitor-google-sign-in/ios/Plugin/GoogleSignIn.swift
+@@ -57,6 +57,18 @@ import GoogleSignIn
+                 serverAuthCode = result.serverAuthCode
+             }
+ 
++            // Extract the nonce plaintext from the AppAuth authorization request.
++            // AppAuth auto-generates a nonce and sends it to Google's OAuth server,
++            // which embeds a hash of it in the idToken. We need the plaintext to
++            // pass to Supabase's signInWithIdToken for verification.
++            var noncePlaintext: String?
++            if let authState = user.value(forKey: "authState") as? NSObject,
++               let lastAuthResponse = authState.value(forKey: "lastAuthorizationResponse") as? NSObject,
++               let request = lastAuthResponse.value(forKey: "request") as? NSObject,
++               let nonce = request.value(forKey: "nonce") as? String {
++                noncePlaintext = nonce
++            }
++
+             let signInResult = SignInResult(
+                 idToken: idToken,
+                 userId: userId,
+@@ -66,7 +78,8 @@ import GoogleSignIn
+                 familyName: familyName,
+                 imageUrl: imageUrl,
+                 accessToken: accessToken,
+-                serverAuthCode: serverAuthCode
++                serverAuthCode: serverAuthCode,
++                nonce: noncePlaintext
+             )
+             completion(signInResult, nil)
+         }
