@@ -1178,14 +1178,16 @@ function LoginScreen(){
         if(plugin){
           const result=await plugin.signIn();
           console.log('[Auth] Native Google Sign In succeeded, got idToken:',!!result.idToken);
+          console.log('[Auth] Google idToken (first 50 chars):',result.idToken?result.idToken.substring(0,50)+'...':'null');
+          console.log('[Auth] Google signIn result keys:',Object.keys(result));
           const{data,error}=await sb.auth.signInWithIdToken({provider:'google',token:result.idToken});
-          if(error){console.error('[Auth] Supabase signInWithIdToken (google) error:',error);setLoading(false);return;}
+          if(error){console.error('[Auth] Supabase signInWithIdToken (google) error:',JSON.stringify({message:error.message,status:error.status,code:error.code,name:error.name,details:error.details,hint:error.hint,full:error}));setLoading(false);return;}
           console.log('[Auth] Supabase session established via native Google Sign In');
           return;
         }
         console.log('[Auth] GoogleSignIn plugin unavailable, falling back to OAuth');
       }catch(e){
-        console.error('[Auth] Native Google Sign In failed:',e);
+        console.error('[Auth] Native Google Sign In failed:',JSON.stringify({message:e.message,code:e.code,status:e.status,name:e.name,stack:e.stack}));
         setLoading(false);
         return;
       }
@@ -1504,13 +1506,16 @@ function App(){
           todayArr.push(clean);
         });
         next[todayKey]=todayArr;
-        // Schedule save for the moved tasks
-        setForward(fwd=>{scheduleSave(next,fwd);return fwd;});
+        // Persist rollover immediately (bypass debounce so it can't be cancelled)
+        const ops=[];
+        todayArr.forEach((t,i)=>ops.push(dbUpsertTask(t,todayKey,i)));
+        Promise.all(ops).then(()=>localStorage.setItem(ROLLOVER_KEY,todayKey)).catch(console.error);
         return next;
       });
       setRolloverTasks(rollovers.map(t=>{const{_fromDayKey,...clean}=t;return clean;}));
+    } else {
+      localStorage.setItem(ROLLOVER_KEY,todayKey);
     }
-    localStorage.setItem(ROLLOVER_KEY,todayKey);
   };
   useEffect(()=>{if(session)fullSync();},[session]);
 
@@ -1519,12 +1524,13 @@ function App(){
     if(!session)return;
     const onVisible=()=>{if(document.visibilityState==='visible')fullSync();};
     document.addEventListener('visibilitychange',onVisible);
-    // Schedule a sync just after midnight EST
-    const now=estNow();
-    const midnight=new Date(now);midnight.setDate(midnight.getDate()+1);midnight.setHours(0,0,10,0);
-    const ms=midnight-now;
-    const midnightTimer=setTimeout(()=>fullSync(),ms);
-    return()=>{document.removeEventListener('visibilitychange',onVisible);clearTimeout(midnightTimer);};
+    // Check every 60s if the date has changed; trigger sync when it does
+    let lastDateCheck=estTodayKey();
+    const dateCheckInterval=setInterval(()=>{
+      const now=estTodayKey();
+      if(now!==lastDateCheck){lastDateCheck=now;fullSync();}
+    },60000);
+    return()=>{document.removeEventListener('visibilitychange',onVisible);clearInterval(dateCheckInterval);};
   },[session]);
 
   const scheduleSave=(tasksObj,fwdArr)=>{
